@@ -1,0 +1,14 @@
+{
+  "fresh broccoli": {
+    "name": "Fresh Broccoli",
+    "safetyScore": 9,
+    "safetyLevel": "safe",
+    "pros": [
+      { "id": "1", "label": "High in nutrients", "severity": "low", "category": "nutrition" }
+    ],
+    "cons": [
+      { "id": "2", "label": "Requires washing", "severity": "medium", "category": "biological" }
+    ],
+    "certifications": ["USDA Organic"]
+  }
+}
