@@ -1,0 +1,56 @@
+{
+  "food": [
+    "FDA Database",
+    "USDA Nutrition",
+    "EU Food Safety Authority",
+    "WHO Food Standards"
+  ],
+  "toy": [
+    "CPSC Database",
+    "CE Marking Authority",
+    "ASTM International",
+    "ISO Toy Safety"
+  ],
+  "cosmetic": [
+    "FDA Cosmetics",
+    "EU Cosmetics Regulation",
+    "Personal Care Products Council",
+    "EWG Skin Deep Database"
+  ],
+  "electronic": [
+    "FCC Equipment Database",
+    "UL Standards",
+    "IEC Safety Standards",
+    "RoHS Compliance Database"
+  ],
+  "household": [
+    "EPA Safer Choice",
+    "OSHA Chemical Database",
+    "Green Seal Certification",
+    "EcoLogo Program"
+  ],
+  "clothing": [
+    "CPSC Textiles",
+    "OEKO-TEX Standards",
+    "REACH Regulation",
+    "FTC Care Labeling"
+  ],
+  "pharmaceutical": [
+    "FDA Orange Book",
+    "USP Standards",
+    "WHO Drug Information",
+    "EMA Database"
+  ],
+  "automotive": [
+    "NHTSA Database",
+    "DOT Standards",
+    "SAE International",
+    "IIHS Safety Ratings"
+  ],
+  "other": [
+    "Consumer Reports",
+    "UL Product Database",
+    "ANSI Standards",
+    "ISO Guidelines"
+  ]
+}

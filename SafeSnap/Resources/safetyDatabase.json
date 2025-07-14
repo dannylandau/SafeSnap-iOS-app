@@ -1,0 +1,610 @@
+{
+  "fresh broccoli": {
+    "name": "Fresh Broccoli",
+    "productType": "food",
+    "safetyScore": 9,
+    "safetyLevel": "safe",
+    "pros": [
+      {
+        "id": "1",
+        "label": "High in nutrients and vitamins",
+        "severity": "low",
+        "category": "nutrition"
+      },
+      {
+        "id": "2",
+        "label": "No artificial additives",
+        "severity": "low",
+        "category": "chemical"
+      },
+      {
+        "id": "3",
+        "label": "Rich in fiber and antioxidants",
+        "severity": "low",
+        "category": "nutrition"
+      },
+      {
+        "id": "4",
+        "label": "Low calorie, nutrient dense",
+        "severity": "low",
+        "category": "nutrition"
+      }
+    ],
+    "cons": [
+      {
+        "id": "5",
+        "label": "Requires thorough washing before consumption",
+        "severity": "medium",
+        "category": "biological"
+      },
+      {
+        "id": "6",
+        "label": "Potential choking hazard for infants",
+        "severity": "medium",
+        "category": "physical"
+      },
+      {
+        "id": "7",
+        "label": "May harbor bacteria if not properly cleaned",
+        "severity": "medium",
+        "category": "biological"
+      }
+    ],
+    "certifications": [
+      "USDA Organic",
+      "Non-GMO Verified"
+    ],
+    "recalls": [],
+    "hygieneWarnings": [
+      {
+        "type": "wash",
+        "message": "Wash thoroughly under running water before eating"
+      },
+      {
+        "type": "bacteria",
+        "message": "Fresh produce can harbor harmful bacteria - proper cleaning essential"
+      }
+    ]
+  },
+  "apple": {
+    "name": "Apple",
+    "productType": "food",
+    "safetyScore": 8,
+    "safetyLevel": "safe",
+    "pros": [
+      {
+        "id": "1",
+        "label": "High in fiber and vitamin C",
+        "severity": "low",
+        "category": "nutrition"
+      },
+      {
+        "id": "2",
+        "label": "Natural antioxidants",
+        "severity": "low",
+        "category": "nutrition"
+      },
+      {
+        "id": "3",
+        "label": "No added sugars",
+        "severity": "low",
+        "category": "chemical"
+      }
+    ],
+    "cons": [
+      {
+        "id": "4",
+        "label": "Pesticide residue possible",
+        "severity": "medium",
+        "category": "chemical"
+      },
+      {
+        "id": "5",
+        "label": "Wax coating on some varieties",
+        "severity": "low",
+        "category": "chemical"
+      },
+      {
+        "id": "6",
+        "label": "Surface contamination from handling",
+        "severity": "medium",
+        "category": "biological"
+      }
+    ],
+    "certifications": [
+      "USDA Organic"
+    ],
+    "recalls": [],
+    "hygieneWarnings": [
+      {
+        "type": "wash",
+        "message": "Wash apple skin thoroughly to remove pesticides and bacteria"
+      },
+      {
+        "type": "surface",
+        "message": "Fruit surfaces can carry germs from handling and transport"
+      }
+    ]
+  },
+  "remote control car": {
+    "name": "Remote Control Car",
+    "productType": "toy",
+    "safetyScore": 6,
+    "safetyLevel": "caution",
+    "pros": [
+      {
+        "id": "1",
+        "label": "CE safety certified",
+        "severity": "low",
+        "category": "regulatory"
+      },
+      {
+        "id": "2",
+        "label": "Age-appropriate design",
+        "severity": "low",
+        "category": "physical"
+      },
+      {
+        "id": "3",
+        "label": "Durable construction materials",
+        "severity": "low",
+        "category": "mechanical"
+      }
+    ],
+    "cons": [
+      {
+        "id": "4",
+        "label": "Small parts - choking hazard",
+        "severity": "high",
+        "category": "physical"
+      },
+      {
+        "id": "5",
+        "label": "Battery compartment access",
+        "severity": "medium",
+        "category": "electrical"
+      },
+      {
+        "id": "6",
+        "label": "Potential lead in paint",
+        "severity": "medium",
+        "category": "chemical"
+      },
+      {
+        "id": "7",
+        "label": "Accumulates dirt and germs during play",
+        "severity": "medium",
+        "category": "biological"
+      },
+      {
+        "id": "8",
+        "label": "Hard to clean intricate parts",
+        "severity": "medium",
+        "category": "biological"
+      }
+    ],
+    "certifications": [
+      "CE Mark",
+      "CPSC Approved"
+    ],
+    "recalls": [],
+    "hygieneWarnings": [
+      {
+        "type": "dirty",
+        "message": "Toys get dirty during play - clean regularly with disinfectant"
+      },
+      {
+        "type": "germs",
+        "message": "Shared toys can spread germs between children"
+      },
+      {
+        "type": "cleaning",
+        "message": "Clean before and after play, especially if shared with others"
+      }
+    ]
+  },
+  "stuffed animal": {
+    "name": "Stuffed Animal",
+    "productType": "toy",
+    "safetyScore": 7,
+    "safetyLevel": "safe",
+    "pros": [
+      {
+        "id": "1",
+        "label": "Soft, child-safe materials",
+        "severity": "low",
+        "category": "physical"
+      },
+      {
+        "id": "2",
+        "label": "No small detachable parts",
+        "severity": "low",
+        "category": "physical"
+      },
+      {
+        "id": "3",
+        "label": "Machine washable",
+        "severity": "low",
+        "category": "biological"
+      }
+    ],
+    "cons": [
+      {
+        "id": "4",
+        "label": "Potential allergens in stuffing",
+        "severity": "medium",
+        "category": "allergen"
+      },
+      {
+        "id": "5",
+        "label": "Dust mite accumulation over time",
+        "severity": "medium",
+        "category": "biological"
+      },
+      {
+        "id": "6",
+        "label": "Absorbs saliva, sweat, and germs",
+        "severity": "medium",
+        "category": "biological"
+      },
+      {
+        "id": "7",
+        "label": "Difficult to fully sanitize if not washable",
+        "severity": "medium",
+        "category": "biological"
+      }
+    ],
+    "certifications": [
+      "CPSIA Compliant"
+    ],
+    "recalls": [],
+    "hygieneWarnings": [
+      {
+        "type": "wash",
+        "message": "Wash regularly in hot water to kill germs and dust mites"
+      },
+      {
+        "type": "germs",
+        "message": "Plush toys absorb bodily fluids and can harbor bacteria"
+      },
+      {
+        "type": "allergens",
+        "message": "May trigger allergies if not kept clean"
+      }
+    ]
+  },
+  "garbage bin": {
+    "name": "Garbage Bin",
+    "productType": "household",
+    "safetyScore": 3,
+    "safetyLevel": "unsafe",
+    "pros": [
+      {
+        "id": "1",
+        "label": "Essential for waste management",
+        "severity": "low",
+        "category": "environmental"
+      }
+    ],
+    "cons": [
+      {
+        "id": "2",
+        "label": "High concentration of harmful bacteria",
+        "severity": "high",
+        "category": "biological"
+      },
+      {
+        "id": "3",
+        "label": "Potential disease transmission",
+        "severity": "high",
+        "category": "biological"
+      },
+      {
+        "id": "4",
+        "label": "Toxic fumes from decomposing waste",
+        "severity": "high",
+        "category": "chemical"
+      },
+      {
+        "id": "5",
+        "label": "Attracts pests and insects",
+        "severity": "high",
+        "category": "biological"
+      },
+      {
+        "id": "6",
+        "label": "Cross-contamination risk",
+        "severity": "high",
+        "category": "biological"
+      }
+    ],
+    "certifications": [],
+    "recalls": [],
+    "hygieneWarnings": [
+      {
+        "type": "danger",
+        "message": "EXTREMELY UNSANITARY - Do not touch without gloves"
+      },
+      {
+        "type": "germs",
+        "message": "Contains dangerous levels of bacteria, viruses, and pathogens"
+      },
+      {
+        "type": "cleaning",
+        "message": "Wash hands immediately after any contact"
+      },
+      {
+        "type": "contamination",
+        "message": "Can contaminate everything it touches"
+      }
+    ]
+  },
+  "trash can": {
+    "name": "Trash Can",
+    "productType": "household",
+    "safetyScore": 4,
+    "safetyLevel": "unsafe",
+    "pros": [
+      {
+        "id": "1",
+        "label": "Contained waste storage",
+        "severity": "low",
+        "category": "environmental"
+      }
+    ],
+    "cons": [
+      {
+        "id": "2",
+        "label": "Bacterial contamination from waste",
+        "severity": "high",
+        "category": "biological"
+      },
+      {
+        "id": "3",
+        "label": "Odor and potential health hazards",
+        "severity": "high",
+        "category": "biological"
+      },
+      {
+        "id": "4",
+        "label": "Surface contamination",
+        "severity": "high",
+        "category": "biological"
+      }
+    ],
+    "certifications": [],
+    "recalls": [],
+    "hygieneWarnings": [
+      {
+        "type": "dirty",
+        "message": "Waste containers are breeding grounds for bacteria"
+      },
+      {
+        "type": "germs",
+        "message": "High risk of pathogen transmission"
+      },
+      {
+        "type": "cleaning",
+        "message": "Disinfect regularly and wash hands after contact"
+      }
+    ]
+  },
+  "matte lipstick": {
+    "name": "Matte Lipstick",
+    "productType": "cosmetic",
+    "safetyScore": 6,
+    "safetyLevel": "caution",
+    "pros": [
+      {
+        "id": "1",
+        "label": "FDA approved color additives",
+        "severity": "low",
+        "category": "regulatory"
+      },
+      {
+        "id": "2",
+        "label": "Dermatologist tested formula",
+        "severity": "low",
+        "category": "biological"
+      }
+    ],
+    "cons": [
+      {
+        "id": "3",
+        "label": "Contains parabens",
+        "severity": "medium",
+        "category": "chemical"
+      },
+      {
+        "id": "4",
+        "label": "Potential heavy metal traces",
+        "severity": "high",
+        "category": "chemical"
+      },
+      {
+        "id": "5",
+        "label": "May cause allergic reactions",
+        "severity": "medium",
+        "category": "allergen"
+      },
+      {
+        "id": "6",
+        "label": "Not suitable for sensitive skin",
+        "severity": "medium",
+        "category": "biological"
+      },
+      {
+        "id": "7",
+        "label": "Can harbor bacteria if shared",
+        "severity": "medium",
+        "category": "biological"
+      }
+    ],
+    "certifications": [
+      "FDA Approved"
+    ],
+    "recalls": [
+      {
+        "id": "r1",
+        "date": "2023-08-15",
+        "reason": "Elevated lead levels detected in batch #2023-07",
+        "severity": "high",
+        "source": "FDA"
+      }
+    ],
+    "hygieneWarnings": [
+      {
+        "type": "germs",
+        "message": "Never share lipstick - can transmit bacteria and viruses"
+      },
+      {
+        "type": "cleaning",
+        "message": "Clean applicator regularly to prevent bacterial growth"
+      }
+    ]
+  },
+  "smartphone": {
+    "name": "Smartphone",
+    "productType": "electronic",
+    "safetyScore": 7,
+    "safetyLevel": "safe",
+    "pros": [
+      {
+        "id": "1",
+        "label": "FCC radiation compliance",
+        "severity": "low",
+        "category": "regulatory"
+      },
+      {
+        "id": "2",
+        "label": "Low SAR rating",
+        "severity": "low",
+        "category": "electrical"
+      },
+      {
+        "id": "3",
+        "label": "Quality build materials",
+        "severity": "low",
+        "category": "physical"
+      },
+      {
+        "id": "4",
+        "label": "Multiple safety certifications",
+        "severity": "low",
+        "category": "regulatory"
+      }
+    ],
+    "cons": [
+      {
+        "id": "5",
+        "label": "Lithium battery fire risk",
+        "severity": "medium",
+        "category": "electrical"
+      },
+      {
+        "id": "6",
+        "label": "Blue light emission concerns",
+        "severity": "low",
+        "category": "physical"
+      },
+      {
+        "id": "7",
+        "label": "Screen harbors bacteria and germs",
+        "severity": "medium",
+        "category": "biological"
+      },
+      {
+        "id": "8",
+        "label": "Frequent hand contact spreads germs",
+        "severity": "medium",
+        "category": "biological"
+      }
+    ],
+    "certifications": [
+      "FCC ID",
+      "CE Mark",
+      "RoHS Compliant"
+    ],
+    "recalls": [],
+    "hygieneWarnings": [
+      {
+        "type": "germs",
+        "message": "Phone screens carry 10x more bacteria than toilet seats"
+      },
+      {
+        "type": "cleaning",
+        "message": "Clean screen daily with alcohol-based wipes"
+      },
+      {
+        "type": "contamination",
+        "message": "Avoid touching face after handling phone"
+      }
+    ]
+  },
+  "all-purpose cleaner": {
+    "name": "All-Purpose Cleaner",
+    "productType": "household",
+    "safetyScore": 5,
+    "safetyLevel": "caution",
+    "pros": [
+      {
+        "id": "1",
+        "label": "EPA registered formula",
+        "severity": "low",
+        "category": "regulatory"
+      },
+      {
+        "id": "2",
+        "label": "Effective antimicrobial action",
+        "severity": "low",
+        "category": "biological"
+      }
+    ],
+    "cons": [
+      {
+        "id": "3",
+        "label": "Toxic if ingested",
+        "severity": "high",
+        "category": "chemical"
+      },
+      {
+        "id": "4",
+        "label": "Skin and eye irritant",
+        "severity": "high",
+        "category": "chemical"
+      },
+      {
+        "id": "5",
+        "label": "Harmful vapors when mixed",
+        "severity": "high",
+        "category": "chemical"
+      },
+      {
+        "id": "6",
+        "label": "Keep away from children",
+        "severity": "high",
+        "category": "physical"
+      },
+      {
+        "id": "7",
+        "label": "Environmental impact concerns",
+        "severity": "medium",
+        "category": "environmental"
+      }
+    ],
+    "certifications": [
+      "EPA Registered"
+    ],
+    "recalls": [],
+    "hygieneWarnings": [
+      {
+        "type": "cleaning",
+        "message": "Wear gloves when handling to protect skin"
+      },
+      {
+        "type": "contamination",
+        "message": "Wash hands thoroughly after use"
+      }
+    ]
+  }
+}
