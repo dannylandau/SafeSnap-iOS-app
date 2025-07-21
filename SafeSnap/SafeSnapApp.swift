@@ -12,12 +12,13 @@ import Clerk
 struct SafeSnapApp: App {
     // 1️⃣ Hold your Clerk singleton in @State
     @State private var clerk = Clerk.shared
+    @StateObject private var historyVM = HistoryViewModel()
 
     var body: some Scene {
         WindowGroup {
             ZStack {
                 if clerk.isLoaded {
-                    MainTabView()      // ← your TabView root
+                    MainTabView().environmentObject(historyVM)      // ← your TabView root
                 } else {
                     ProgressView()     // ← while Clerk spins up
                 }
