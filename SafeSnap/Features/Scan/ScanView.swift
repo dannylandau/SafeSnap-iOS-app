@@ -1,5 +1,5 @@
 //
-//  HomeView.swift
+//  ScanView.swift
 //  SafeSnap
 //
 //  Created by Marcin Grześkowiak on 27/06/2025.
@@ -8,8 +8,9 @@
 import SwiftUI
 import PhotosUI
 
-struct HomeView: View {
+struct ScanView: View {
     // MARK: – Image source selection
+    @EnvironmentObject private var historyVM: HistoryViewModel
     @State private var activeSheet: ActiveSheet? = .none
     @State private var selectedItem: PhotosPickerItem?
     
@@ -59,33 +60,13 @@ struct HomeView: View {
                         .foregroundColor(.green)
                         .clipShape(Capsule())
                     
-                    // MARK: Status Card
-                    VStack(spacing: 8) {
-                        Text("Google Vision API Connected")
-                            .font(.headline)
-                        Text("Full AI-powered product identification active")
-                            .font(.subheadline)
-                        VStack(alignment: .leading, spacing: 4) {
-                            HStack { Image(systemName: "checkmark"); Text("API key validated successfully") }
-                            HStack { Image(systemName: "checkmark"); Text("Vision API enabled and accessible") }
-                            HStack { Image(systemName: "checkmark"); Text("Ready for advanced product identification") }
-                        }
-                        .font(.caption)
-                        .foregroundColor(.secondary)
-                    }
-                    .padding()
-                    .frame(maxWidth: .infinity)
-                    .background(Color.green.opacity(0.1))
-                    .cornerRadius(12)
-                    .padding(.horizontal)
-                    
                     // MARK: Category Pills
                     WrapPillsView(pills: PillData.default)
                     .padding(.horizontal)
                     
                     // MARK: Scan Button
                     Button {
-                        activeSheet = .sourcePicker
+                        activeSheet = .camera
                     } label: {
                         Label("Scan Product", systemImage: "camera")
                             .font(.headline)
@@ -97,7 +78,26 @@ struct HomeView: View {
                     }
                     .padding(.horizontal)
                     
-                    Text("Take a photo or upload from gallery\nAll formats supported")
+                    PhotosPicker(selection: $selectedItem, matching: .images, preferredItemEncoding: .automatic, label: {
+                        Label("Choose from Photos", systemImage: "photo.on.rectangle.angled")
+                            .font(.headline)
+                            .frame(maxWidth: .infinity)
+                            .padding()
+                            .background(Color.blue)
+                            .foregroundColor(.white)
+                            .cornerRadius(16)
+                    })
+                    .onChange(of: selectedItem) { item in
+                        Task {
+                            if let data = try? await item?.loadTransferable(type: Data.self),
+                               let ui   = UIImage(data: data) {
+                                handleImage(ui)
+                            }
+                        }
+                    }
+                    .padding(.horizontal)
+                    
+                    Text("Take a photo or choose from your photo gallery")
                         .font(.footnote)
                         .multilineTextAlignment(.center)
                         .foregroundColor(.secondary)
@@ -181,50 +181,51 @@ struct HomeView: View {
         // MARK: Sheet for camera/gallery flow
         .sheet(item: $activeSheet) { sheet in
             switch sheet {
-            case .sourcePicker:
-                ImageSourcePickerView(
-                    onCamera:  { activeSheet = .camera },
-                    onGallery: { activeSheet = .gallery }
-                )
             case .camera:
                 CameraView(onImageCaptured: handleImage)
-            case .gallery:
-                PhotosPicker(
-                    selection: $selectedItem,
-                    matching: .images
-                ) {
-                    Label("Choose Photo", systemImage: "photo.on.rectangle.angled")
-                        .font(.headline)
-                        .padding()
-                }
-                .onChange(of: selectedItem) { item in
-                    Task {
-                        if let data = try? await item?.loadTransferable(type: Data.self),
-                           let ui   = UIImage(data: data) {
-                            handleImage(ui)
-                        }
-                    }
-                }
             }
         }
     }
     
     // MARK: – Handle any picked image
     private func handleImage(_ image: UIImage) {
-        activeSheet = nil
-        isAnalyzing  = true
-        
-        RecognitionCoordinator.analyze(
-            image: image,
-            onPhaseChange: { phase in currentPhase = phase },
-            completion:   { _     in isAnalyzing = false }
-        )
+      activeSheet = nil
+      isAnalyzing = true
+
+      RecognitionCoordinator.analyze(
+        image: image,
+        onPhaseChange: { phase in currentPhase = phase },
+        completion: { result in
+          // back on main
+          isAnalyzing = false
+
+          if let r = result {
+            // 1️⃣ Add to history
+            let historyItem = ScanHistoryItem(
+              product: r.product,
+              labels: r.labels,
+              score: Int(r.score),
+              thumbnail: image
+            )
+            historyVM.add(historyItem)
+
+            // 2️⃣ Show your ResultView (existing flow)
+//            self.lastLabels = r.labels
+//            self.result     = r.product
+//            self.showResult = true
+          } else {
+            // existing “not found” path
+//            self.notFoundLabel = result?.labels.first
+//            self.showNotFound  = true
+          }
+        }
+      )
     }
 }
 
 // MARK: – Sheet cases
 private enum ActiveSheet: Identifiable {
-    case sourcePicker, camera, gallery
+    case camera
     var id: Int { hashValue }
 }
 
