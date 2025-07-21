@@ -1,60 +1,38 @@
 //
 //  HistoryView.swift
-//  SafeScan
+//  SafeSnap
 //
-//  Created by Marcin Grześkowiak on 10/07/2025.
+//  Created by Marcin Grześkowiak on 21/07/2025.
 //
 
 
 import SwiftUI
+import Clerk
 
 struct HistoryView: View {
-    @State private var isSignedIn = false // for future logic
+  // ① pull the Clerk SDK instance
+  @Environment(Clerk.self) private var clerk
 
-    var body: some View {
-        VStack(spacing: 24) {
-            Spacer()
-
-            Image(systemName: "lock.circle.fill")
-                .resizable()
-                .frame(width: 80, height: 80)
-                .foregroundColor(.blue)
-                .shadow(radius: 4)
-
-            Text("View Scan History")
-                .font(.title.bold())
-                .multilineTextAlignment(.center)
-
-            Text("Sign in to access your saved product scans and safety analysis history")
-                .font(.subheadline)
-                .foregroundColor(.secondary)
-                .multilineTextAlignment(.center)
-                .padding(.horizontal)
-
-            Button(action: {
-                // TODO: Sign in action
-            }) {
-                Label("Sign In", systemImage: "arrow.right.circle.fill")
-                    .frame(maxWidth: .infinity)
-                    .padding()
-                    .background(Color.green)
-                    .foregroundColor(.white)
-                    .cornerRadius(12)
-            }
-            .padding(.horizontal)
-
-            Button("Continue without signing in") {
-                // TODO: Continue as guest
-            }
-            .font(.subheadline)
-            .foregroundColor(.green)
-
-            Spacer()
+  var body: some View {
+    Group {
+      if let _ = clerk.user {
+        // ② user is signed in → show your SignedInAccountView
+        NavigationView {
+          SignedInHistoryView()
         }
-        .padding()
+      } else {
+        // ③ no user → show Clerk’s sign-up / sign-in UI
+        SignUpOrSignInView()
+      }
     }
+  }
 }
 
 #Preview {
-    HistoryView()
+  AccountView()
+    .environment(Clerk.shared)  // for preview
+}
+
+#Preview {
+    AccountView()
 }
