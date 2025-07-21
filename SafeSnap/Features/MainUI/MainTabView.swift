@@ -27,7 +27,7 @@ struct MainTabView: View {
         .tag(MainTab.history)  // ← tag this view as .history
 
       // 4️⃣ Scan tab (middle) – this will now show first
-      HomeView()
+      ScanView()
         .tabItem {
           Label("Scan", systemImage: "camera")
         }
