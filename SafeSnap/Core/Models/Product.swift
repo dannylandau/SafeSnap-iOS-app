@@ -8,7 +8,8 @@
 
 import Foundation
 
-struct Product: Decodable {
+struct Product: Identifiable, Codable, Hashable {
+    let id: String
     let name: String
     let productType: String
     let safetyScore: Int
@@ -19,14 +20,14 @@ struct Product: Decodable {
     let hygieneWarnings: [HygieneWarning]
 }
 
-struct SafetyPoint: Decodable, Identifiable {
+struct SafetyPoint: Identifiable, Codable, Hashable {
     let id: String
     let label: String
     let severity: String
     let category: String
 }
 
-struct HygieneWarning: Decodable, Identifiable {
+struct HygieneWarning: Identifiable, Codable, Hashable {
     var id: String { type }
     let type: String
     let message: String
