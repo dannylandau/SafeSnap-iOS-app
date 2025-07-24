@@ -5,7 +5,7 @@ Analyze product labels and packaging using Vision AI + OpenAI, check safety data
 
 ---
 
-![Build](https://img.shields.io/github/actions/workflow/status/yourusername/safesnap/ci.yml)
+![Build](https://github.com/dannylandau/SafeSnap-iOS-app/actions/workflows/unit_tests.yml/badge.svg)
 ![License](https://img.shields.io/github/license/yourusername/safesnap)
 ![Platform](https://img.shields.io/badge/platform-iOS%2017%2B-blue)
 
