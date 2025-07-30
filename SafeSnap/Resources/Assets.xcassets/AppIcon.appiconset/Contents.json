@@ -1,7 +1,7 @@
 {
   "images" : [
     {
-      "filename" : "Screenshot 2025-07-23 at 17.08.40.png",
+      "filename" : "AppIcon1024x1024.png",
       "idiom" : "universal",
       "platform" : "ios",
       "size" : "1024x1024"
@@ -13,7 +13,7 @@
           "value" : "dark"
         }
       ],
-      "filename" : "Screenshot 2025-07-23 at 17.08.40 1.png",
+      "filename" : "AppIcon1024x1024 1.png",
       "idiom" : "universal",
       "platform" : "ios",
       "size" : "1024x1024"
@@ -25,7 +25,7 @@
           "value" : "tinted"
         }
       ],
-      "filename" : "Screenshot 2025-07-23 at 17.08.40 2.png",
+      "filename" : "AppIcon1024x1024 2.png",
       "idiom" : "universal",
       "platform" : "ios",
       "size" : "1024x1024"
