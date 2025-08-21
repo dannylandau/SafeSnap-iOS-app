@@ -10,7 +10,7 @@ import SwiftUI
 
 struct WrapPillsView: View {
     let pills: [(emoji: String, label: String)]
-    let columns = [GridItem(.adaptive(minimum: 100), spacing: 8, alignment: .center)]
+    let columns = [GridItem(.adaptive(minimum: 150, maximum: 260), spacing: 12, alignment: .center)]
 
     @State private var appear = false
 
@@ -20,9 +20,10 @@ struct WrapPillsView: View {
                 Text(pill.emoji + " " + pill.label)
                     .font(.subheadline)
                     .lineLimit(1)
-                    .fixedSize(horizontal: true, vertical: false)
+                    .minimumScaleFactor(0.9)
                     .padding(.vertical, 6)
                     .padding(.horizontal, 12)
+                    .frame(maxWidth: .infinity, alignment: .center)
                     .background(Color(.secondarySystemBackground))
                     .foregroundColor(.primary)
                     .clipShape(Capsule())
@@ -44,12 +45,17 @@ struct WrapPillsView: View {
 struct PillData {
     /// The seven default categories
     static let `default` = [
-        ("🐶", "Animals"),
-        ("💎", "Jewelry"),
-        ("🍎", "Food"),
-        ("🧸", "Toys"),
-        ("💄", "Beauty"),
-        ("💻", "Electronics"),
-        ("🏠", "Household"),
+        ("📦","All"),
+        ("🍎","Food"),
+        ("💄","Cosmetic"),
+        ("🧸","Toy"),
+        ("💻","Electronic"),
+        ("🏠","Household"),
+        ("👕","Clothing"),
+        ("🐶","Animal"),
+        ("💍","Jewelry"),
+        ("💊","Pharmaceutical"),
+        ("🚗","Automotive"),
+        ("❓","Other")
     ]
 }

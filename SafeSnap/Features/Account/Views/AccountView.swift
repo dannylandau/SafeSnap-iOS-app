@@ -40,7 +40,7 @@ struct AccountView: View {
         if isSignedIn {
             SignedInAccountView(viewModel: viewModel)
         } else {
-            SignUpOrSignInView()
+            AuthView(mode: .signInOrUp)
         }
     }
 }

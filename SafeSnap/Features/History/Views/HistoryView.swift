@@ -38,7 +38,7 @@ struct HistoryView: View {
             SignedInHistoryView()
                 .environmentObject(viewModel)
         } else {
-            SignUpOrSignInView()
+            AuthView(mode: .signInOrUp)
         }
     }
 }

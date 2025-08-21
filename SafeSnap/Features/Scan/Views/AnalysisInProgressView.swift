@@ -4,10 +4,12 @@ import Combine
 struct AnalysisInProgressView: View {
     let image: UIImage?
     @ObservedObject var coordinator: ScanAnalysisCoordinator
+    let errorMessage: String?
 
-    init(image: UIImage?, coordinator: ScanAnalysisCoordinator) {
+    init(image: UIImage?, coordinator: ScanAnalysisCoordinator, errorMessage: String? = nil) {
         self.image = image
         self.coordinator = coordinator
+        self.errorMessage = errorMessage
     }
     
     var body: some View {
@@ -39,6 +41,14 @@ struct AnalysisInProgressView: View {
                     .foregroundColor(Color.green)
             }
             
+            if let errorMessage = errorMessage {
+                Text(errorMessage)
+                    .foregroundColor(.red)
+                    .font(.footnote)
+                    .multilineTextAlignment(.center)
+                    .padding(.horizontal)
+            }
+            
             VStack(spacing: 4) {
                 Text("AI Analysis")
                     .font(.title.bold())
@@ -51,7 +61,7 @@ struct AnalysisInProgressView: View {
                 Text("Processing Steps:")
                     .font(.title3.bold())
                     .foregroundColor(.primary)
-                ForEach(ScanPhase.allCases, id: \.self) { step in
+                ForEach(ScanStepPhase.allCases, id: \.self) { step in
                     HStack(alignment: .center, spacing: 8) {
                         statusIcon(for: step, current: coordinator.currentPhase)
                         Text(step.text)
@@ -71,21 +81,21 @@ struct AnalysisInProgressView: View {
     }
     
     // Helper: progress as fraction
-    private func progressFraction(for phase: ScanPhase) -> Double {
-        guard let idx = ScanPhase.allCases.firstIndex(where: { $0 == phase })
+    private func progressFraction(for phase: ScanStepPhase) -> Double {
+        guard let idx = ScanStepPhase.allCases.firstIndex(where: { $0 == phase })
         else { return 0.1 }
         return Double(idx+1) / Double(PhaseSteps.allSteps.count)
     }
     
     // Helper: color for step
-    private func color(for step: ScanPhase, current: ScanPhase) -> Color {
+    private func color(for step: ScanStepPhase, current: ScanStepPhase) -> Color {
         if step == current { return .green }
         if PhaseSteps.isAfter(step, than: current) { return .secondary }
         return .primary
     }
     
     // Helper: status icon
-    private func statusIcon(for step: ScanPhase, current: ScanPhase) -> some View {
+    private func statusIcon(for step: ScanStepPhase, current: ScanStepPhase) -> some View {
         if step == current {
             return AnyView(
                 ProgressView()
@@ -105,43 +115,17 @@ struct AnalysisInProgressView: View {
 }
 
 struct PhaseSteps {
-    static let allSteps: [ScanPhase] = ScanPhase.allCases
-    static func isAfter(_ p1: ScanPhase, than p2: ScanPhase) -> Bool {
+    static let allSteps: [ScanStepPhase] = ScanStepPhase.allCases
+    static func isAfter(_ p1: ScanStepPhase, than p2: ScanStepPhase) -> Bool {
         guard let idx1 = allSteps.firstIndex(where: { $0 == p1 }),
               let idx2 = allSteps.firstIndex(where: { $0 == p2 }) else { return false }
         return idx1 > idx2
     }
 }
 
-// Add relevant ScanPhase values if not present
-// (should match your analysis flow)
-enum ScanPhase: CaseIterable, Equatable {
-    case preparing
-    case vision
-    case detecting
-    case openAI
-    case identify
-    case databases
-    case openAISafety
-    case petSafety
-    case report
 
-    var text: String {
-        switch self {
-        case .preparing: return "Preparing image for analysis..."
-        case .vision: return "🔍 Connecting to Google Vision API..."
-        case .detecting: return "🎯 Detecting objects and labels..."
-        case .openAI: return "🤖 Running OpenAI Vision analysis..."
-        case .identify: return "🎯 Identifying specific product details..."
-        case .databases: return "🛡️ Checking safety databases (FDA, CPSC, EPA)..."
-        case .openAISafety: return "🤖 Running OpenAI safety analysis..."
-        case .petSafety: return "🐕🐈 Analyzing pet safety implications..."
-        case .report: return "📝 Generating comprehensive safety report..."
-        }
-    }
-}
 
 // Preview
-#Preview {
-    AnalysisInProgressView(image: UIImage(systemName: "photo"), coordinator: ScanAnalysisCoordinator())
-}
+//#Preview {
+//    AnalysisInProgressView(image: UIImage(systemName: "photo"), coordinator: ScanAnalysisCoordinator())
+//}

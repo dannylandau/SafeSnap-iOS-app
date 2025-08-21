@@ -61,8 +61,8 @@ final class AccountViewModel: ObservableObject {
         }
 
         let scanCount = records.count
-        let avgScore = Double(records.map(\.score).reduce(0, +)) / Double(scanCount)
-        let safePercent = Double(records.filter { $0.score >= 7 }.count) / Double(scanCount) * 100
+        let avgScore = Double(records.map(\.analysis.overallSafetyScore).reduce(0, +)) / Double(scanCount)
+        let safePercent = Double(records.filter { $0.analysis.overallSafetyScore >= 7 }.count) / Double(scanCount) * 100
 
         stats = [
             Stat(label: "Scans", value: "\(scanCount)"),
@@ -73,7 +73,7 @@ final class AccountViewModel: ObservableObject {
     }
 
     private func uniqueDays(_ records: [ScanHistoryItem]) -> Int {
-        let days = Set(records.map { Calendar.current.startOfDay(for: $0.date) })
+        let days = Set(records.map { Calendar.current.startOfDay(for: $0.createdAt) })
         return days.count
     }
 

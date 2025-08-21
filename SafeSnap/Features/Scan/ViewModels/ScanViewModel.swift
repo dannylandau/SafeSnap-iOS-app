@@ -10,68 +10,62 @@ import PhotosUI
 import SwiftUI
 
 final class ScanViewModel: ObservableObject {
-    @Published var selectedItem: PhotosPickerItem? {
-        didSet { loadImageFromPicker() }
-    }
     
     @Published var resultVM: RecognitionResultViewModel? = nil
+    @Published var scanStep: ScanStepPhase = .preparing
     
-    enum ScanPhase: Equatable {
-        case idle
-        case analyzing(image: UIImage)
-        case result(RecognitionResultViewModel)
-        
-        
-        static func == (lhs: ScanPhase, rhs: ScanPhase) -> Bool {
-            switch (lhs, rhs) {
-            case (.idle, .idle): return true
-            case (.analyzing, .analyzing): return true
-            case (.result, .result): return true
-            default: return false
-            }
-        }
-    }
-
     @Published var phase: ScanPhase = .idle
-    private var hasCompleted = false
 
-    private let historyService: ScanHistoryService
-    private let analysisService: ImageAnalysisService
+    @Published var scanError: ScanError? = nil
 
-    init(historyService: ScanHistoryService, analysisService: ImageAnalysisService = MockImageAnalysisService()) {
-        self.historyService = historyService
-        self.analysisService = analysisService
+    private var lastImageData: Data?
+    private var lastUIImage: UIImage?
+    private var lastIncludeDog: Bool = false
+    private var lastIncludeCat: Bool = false
+    private var lastIncludeChildren: Bool = false
+
+    let coordinator: ScanAnalysisCoordinator
+
+    init(coordinator: ScanAnalysisCoordinator) {
+        self.coordinator = coordinator
     }
 
     func handleImage(_ image: UIImage) {
-        print("Handling image from picker or camera: \(image)")
-        hasCompleted = false
-        resultVM = nil
-        phase = .analyzing(image: image)
+        Task { @MainActor in
+            self.scanStep = .preparing
+            self.resultVM = nil
+            self.phase = .analyzing(image: image)
+        }
     }
 
-    @MainActor
-    func completeAnalysis() async {
-        guard !hasCompleted else { return }
-        hasCompleted = true
-        guard case let .analyzing(img) = phase else { return }
+    func beginScan(with imageData: Data, uiImage: UIImage, includeDog: Bool, includeCat: Bool, includeChildren: Bool) {
+        self.handleImage(uiImage)
+        lastImageData = imageData
+        lastUIImage = uiImage
+        let thumbnail = uiImage.resizedThumbnail()
 
-        let result = await analysisService.analyze(image: img)
-        historyService.add(result.historyItem)
-        self.phase = .result(result.resultVM)
-        self.resultVM = result.resultVM
-        hasCompleted = false // prepare for next scan
-    }
-
-    private func loadImageFromPicker() {
-        guard let item = selectedItem else { return }
         Task {
-            if let data = try? await item.loadTransferable(type: Data.self),
-               let ui = UIImage(data: data) {
+            do {
+                try await coordinator.start(with: imageData, thumbnail: thumbnail, includeDog: includeDog, includeCat: includeCat, includeChildren: includeChildren)
+                if let result = await coordinator.latestHistoryItem {
+                    let viewModel = RecognitionResultViewModel(image: uiImage, from: result)
+                    await MainActor.run {
+                        self.resultVM = viewModel
+                        self.phase = .result(viewModel)
+                    }
+                }
+            } catch let error as ScanError {
+                await MainActor.run { self.scanError = error }
+            } catch {
                 await MainActor.run {
-                    self.handleImage(ui)
+                    self.scanError = .openAIFailed(reason: error.localizedDescription)
                 }
             }
         }
+    }
+
+    func retryLastScan() {
+        guard let data = lastImageData, let image = lastUIImage else { return }
+        beginScan(with: data, uiImage: image, includeDog: lastIncludeDog, includeCat: lastIncludeCat, includeChildren: lastIncludeChildren)
     }
 }
