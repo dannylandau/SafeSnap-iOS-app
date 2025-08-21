@@ -18,6 +18,44 @@ struct CameraPreview: UIViewRepresentable {
         var previewLayer: AVCaptureVideoPreviewLayer {
             return layer as! AVCaptureVideoPreviewLayer
         }
+        
+        private var lastZoomFactor: CGFloat = 1.0
+
+        override init(frame: CGRect) {
+            super.init(frame: frame)
+            addPinchGesture()
+        }
+
+        required init?(coder: NSCoder) {
+            super.init(coder: coder)
+            addPinchGesture()
+        }
+
+        private func addPinchGesture() {
+            let pinch = UIPinchGestureRecognizer(target: self, action: #selector(handlePinch(_:)))
+            self.addGestureRecognizer(pinch)
+        }
+
+        @objc private func handlePinch(_ gesture: UIPinchGestureRecognizer) {
+            guard let device = AVCaptureDevice.default(for: .video) else { return }
+
+            switch gesture.state {
+            case .began:
+                lastZoomFactor = device.videoZoomFactor
+            case .changed:
+                let maxZoom = min(device.activeFormat.videoMaxZoomFactor, 6.0)
+                let newZoom = min(max(1.0, lastZoomFactor * gesture.scale), maxZoom)
+                do {
+                    try device.lockForConfiguration()
+                    device.videoZoomFactor = newZoom
+                    device.unlockForConfiguration()
+                } catch {
+                    print("Failed to change zoom: \(error)")
+                }
+            default:
+                break
+            }
+        }
     }
 
     let session: AVCaptureSession

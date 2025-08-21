@@ -8,14 +8,30 @@
 import SwiftUI
 import PhotosUI
 
+enum ScanPhase: Equatable {
+        case idle
+        case analyzing(image: UIImage)
+        case result(RecognitionResultViewModel)
+        
+        
+        static func == (lhs: ScanPhase, rhs: ScanPhase) -> Bool {
+            switch (lhs, rhs) {
+            case (.idle, .idle): return true
+            case (.analyzing, .analyzing): return true
+            case (.result, .result): return true
+            default: return false
+            }
+        }
+    }
+
 struct ScanView: View {
     // removed EnvironmentObject; not needed anymore
     @StateObject private var viewModel: ScanViewModel
-    @StateObject private var coordinator = ScanAnalysisCoordinator()
     @AppStorage("includeDogSafety") private var includeDog = false
     @AppStorage("includeCatSafety") private var includeCat = false
     @State private var activeSheet: ActiveSheet? = nil
     @State private var showPetOptions = false
+    @State private var selectedPhoto: PhotosPickerItem?
 
     init(viewModel: ScanViewModel) {
         _viewModel = StateObject(wrappedValue: viewModel)
@@ -39,32 +55,40 @@ struct ScanView: View {
         // Camera Sheet
         .sheet(item: $activeSheet) { sheet in
             if case .camera = sheet {
-                CameraView(onImageCaptured: viewModel.handleImage)
+                CameraView { image in
+                    if let data = image.jpegData(compressionQuality: 0.8) {
+                        activeSheet = nil
+                        viewModel.beginScan(with: data, uiImage: image, includeDog: includeDog, includeCat: includeCat, includeChildren: false)
+                    } else {
+                        print("⚠️ Failed to convert UIImage to JPEG data")
+                    }
+                }
             }
         }
-        .sheet(isPresented: .constant(isShowingAnalysis)) {
+        .sheet(isPresented: .constant(viewModel.phase.isAnalyzing)) {
             if case let .analyzing(image) = viewModel.phase {
-                AnalysisInProgressView(image: image, coordinator: coordinator)
+                AnalysisInProgressView(image: image, coordinator: viewModel.coordinator)
             }
         }
         .sheet(item: $viewModel.resultVM, onDismiss: {
             viewModel.resultVM = nil
-            viewModel.phase = .idle
         }) { vm in
             ResultView(vm: vm)
         }
-        .task(id: viewModel.phase) {
-            if case .analyzing = viewModel.phase {
-                await coordinator.start()
-                await viewModel.completeAnalysis()
-            }
+        .alert(item: $viewModel.scanError) { error in
+            Alert(
+                title: Text("Scan Failed"),
+                message: Text(error.localizedDescription),
+                primaryButton: .default(Text("Retry")) {
+                    viewModel.retryLastScan()
+                },
+                secondaryButton: .cancel()
+            )
         }
     }
 
-    private var isShowingAnalysis: Bool {
-        if case .analyzing = viewModel.phase { return true }
-        return false
-    }
+    // Computed property to check if the current phase is analyzing
+    // (moved to ScanPhase extension below)
 
     private var scanLogo: some View {
         Circle()
@@ -121,7 +145,7 @@ struct ScanView: View {
 
     private var scanPhotoPicker: some View {
         PhotosPicker(
-            selection: $viewModel.selectedItem,
+            selection: $selectedPhoto,
             matching: .images,
             preferredItemEncoding: .automatic
         ) {
@@ -134,6 +158,25 @@ struct ScanView: View {
                 .cornerRadius(16)
         }
         .padding(.horizontal)
+        .onChange(of: selectedPhoto) { oldItem, newItem in
+            guard let item = newItem else {
+                    print("⚠️ selectedPhoto is nil — likely user cancelled or selection failed")
+                    return
+                }
+            
+            Task {
+                do {
+                    if let data = try await item.loadTransferable(type: Data.self),
+                       let image = UIImage(data: data) {
+                        viewModel.beginScan(with: data, uiImage: image, includeDog: includeDog, includeCat: includeCat, includeChildren: false)
+                    } else {
+                        print("No image data found")
+                    }
+                } catch {
+                    print("Failed to load photo: \(error.localizedDescription)")
+                }
+            }
+        }
     }
 
     private var scanInstructions: some View {
@@ -224,4 +267,12 @@ private struct PetOptionsView: View {
 private enum ActiveSheet: Identifiable {
     case camera
     var id: Int { hashValue }
+}
+
+// Extension to ScanPhase to check if it's analyzing
+private extension ScanPhase {
+    var isAnalyzing: Bool {
+        if case .analyzing = self { return true }
+        return false
+    }
 }

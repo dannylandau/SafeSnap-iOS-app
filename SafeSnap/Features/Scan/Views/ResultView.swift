@@ -8,12 +8,15 @@ import UIKit
 
 struct ResultView: View {
     @Environment(\.dismiss) private var dismiss
-    @State private var showingShare = false
+    @State private var sharePayload: SharePayload?
+    struct SharePayload: Identifiable { let id = UUID(); let items: [Any] }
     let vm: RecognitionResultViewModel
 
     var body: some View {
         ScrollView { content }
-        .sheet(isPresented: $showingShare) { shareSheet }
+            .sheet(item: $sharePayload) { payload in
+                ShareSheet(activityItems: payload.items)
+            }
     }
 
     // MARK: — Nav Bar
@@ -38,6 +41,7 @@ struct ResultView: View {
             headerBar()
             safetyBadge()
             kidSafetySection()
+            petSafetySection()
             dataSourcesSection()
             timestampFooter()
         }
@@ -47,7 +51,7 @@ struct ResultView: View {
     private func shareButton() -> some View {
         HStack {
             Spacer()
-            Button { showingShare = true } label: {
+            Button { prepareShare() } label: {
                 Image(systemName: "square.and.arrow.up")
             }
             .padding()
@@ -121,6 +125,84 @@ struct ResultView: View {
         .background(Color.green.opacity(0.15))
         .foregroundColor(.green)
         .cornerRadius(12)
+    }
+
+    // MARK: — Pet Safety
+    private func petSafetySection() -> some View {
+        
+        VStack(spacing: 8) {
+            // Header
+            VStack(alignment: .center, spacing: 4) {
+                HStack {
+                    Image(systemName: "pawprint.fill")
+                    Text("Pet Safety").font(.headline)
+                }
+                Text("Dog & cat specific warnings based on the analysis")
+                    .font(.subheadline)
+                    .foregroundColor(.secondary)
+            }
+            .padding()
+            .frame(maxWidth: .infinity)
+            .background(Color.orange.opacity(0.1))
+            .cornerRadius(12)
+
+            // Body
+            VStack(alignment: .leading, spacing: 12) {
+                // Dogs
+                petColumn(title: "Dogs", warnings: vm.dogWarnings)
+                // Cats
+                petColumn(title: "Cats", warnings: vm.catWarnings)
+            }
+            .padding([.horizontal, .bottom])
+        }
+        .padding(.horizontal)
+    }
+
+    /// Renders a list of pet warnings with a severity badge.
+    /// Expects `vm.dogWarnings` / `vm.catWarnings` to be `[(severity: String, warning: String, reason: String)]`.
+    @ViewBuilder
+    private func petColumn(title: String, warnings: [(severity: String, warning: String, reason: String)]) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(spacing: 8) {
+                Image(systemName: title == "Dogs" ? "dog.fill" : "cat.fill")
+                Text(title).font(.headline)
+                if let maxSeverity = warnings.map({ $0.severity.lowercased() }).max(by: severityLess) {
+                    PetRiskBadge(severity: maxSeverity)
+                }
+                Spacer()
+            }
+
+            if warnings.isEmpty {
+                Text("No specific warnings")
+                    .foregroundStyle(.secondary)
+            } else {
+                ForEach(Array(warnings.enumerated()), id: \.offset) { _, item in
+                    VStack(alignment: .leading, spacing: 4) {
+                        HStack {
+                            Circle().fill(severityColor(item.severity)).frame(width: 8, height: 8)
+                            Text(item.warning).font(.subheadline).bold()
+                        }
+                        Text(item.reason).font(.footnote).foregroundStyle(.secondary)
+                    }
+                    .padding(8)
+                    .background(severityColor(item.severity).opacity(0.08))
+                    .cornerRadius(8)
+                    .accessibilityElement(children: .combine)
+                }
+            }
+        }
+    }
+
+    private struct PetRiskBadge: View {
+        let severity: String
+        var body: some View {
+            Text(severity.capitalized)
+                .font(.caption).bold()
+                .padding(.horizontal, 8).padding(.vertical, 4)
+                .background(severityColor(severity).opacity(0.15))
+                .foregroundStyle(severityColor(severity))
+                .clipShape(Capsule())
+        }
     }
 
     // MARK: — Kid Safety
@@ -201,11 +283,51 @@ struct ResultView: View {
         .padding(.top, 8)
     }
 
-    // MARK: — Share Sheet
-    private var shareSheet: some View {
-        ShareSheet(activityItems: [
-            "Check out my SafeSnap result for \(vm.productName)!"
-        ])
+    // MARK: — Share helpers
+    private func prepareShare() {
+        var items: [Any] = []
+
+        let summary = "SafeSnap — \(vm.productName) (\(vm.category)) — Safety: \(vm.score)/10"
+        items.append(summary)
+
+        if let ui = vm.image { items.append(ui) }
+        if let url = exportCurrentResultAsJSON() { items.append(url) }
+
+        // Present only when we actually have something
+        sharePayload = SharePayload(items: items)
+    }
+
+    private func exportCurrentResultAsJSON() -> URL? {
+        struct Payload: Codable {
+            let productName: String
+            let category: String
+            let score: Int
+            let date: Date
+            let analysis: SafetyAnalysisResponse
+        }
+        let payload = Payload(
+            productName: vm.productName,
+            category: vm.category,
+            score: vm.score,
+            date: vm.date,
+            analysis: vm.analysis
+        )
+        do {
+            let enc = JSONEncoder()
+            enc.dateEncodingStrategy = .iso8601
+            let data = try enc.encode(payload)
+            let safeName = vm.productName.replacingOccurrences(of: "/", with: "-")
+            return try writeTemp(data: data, filename: "SafeSnap-\(safeName)-\(vm.date.ISO8601Format()).json")
+        } catch {
+            print("Share export failed:", error)
+            return nil
+        }
+    }
+
+    private func writeTemp(data: Data, filename: String) throws -> URL {
+        let url = FileManager.default.temporaryDirectory.appendingPathComponent(filename)
+        try data.write(to: url, options: .atomic)
+        return url
     }
 }
 
@@ -224,50 +346,71 @@ struct ShareSheet: UIViewControllerRepresentable {
     ) {}
 }
 
-// MARK: — ResultView Previews
-struct ResultView_Previews: PreviewProvider {
-    /// A sample Product matching your model
-    static var sampleProduct: Product {
-        Product(
-            id: UUID().uuidString,
-            name: "Red Apple",
-            productType: "Food",
-            safetyScore: 9,
-            safetyLevel: "Perfectly Safe",
-            pros: [
-                SafetyPoint(id: "1", label: "No allergens", severity: "low", category: "Regulatory")
-            ],
-            cons: [
-                SafetyPoint(id: "2", label: "Wash before use", severity: "medium", category: "Hygiene")
-            ],
-            certifications: ["FDA Approved", "Consumer Product Safety Commission", "International Safety Standards"],
-            hygieneWarnings: [
-                HygieneWarning(type: "Wash", message: "Rinse under cold water before eating")
-            ]
-        )
-    }
-
-    static var previews: some View {
-        // Build the RecognitionResultViewModel from that product
-        let vm = RecognitionResultViewModel(
-            image: UIImage(systemName: "applelogo"),
-            productName: sampleProduct.name,
-            category: sampleProduct.productType,
-            score: sampleProduct.safetyScore,
-            safetyLabel: sampleProduct.safetyLevel,
-            safeBenefits: sampleProduct.pros.map(\.label),
-            safetyConcerns: sampleProduct.cons.map(\.label),
-            dataSources: sampleProduct.certifications,
-            date: Date()
-        )
-
-        Group {
-            ResultView(vm: vm)
-                .previewDisplayName("Light Mode")
-            ResultView(vm: vm)
-                .preferredColorScheme(.dark)
-                .previewDisplayName("Dark Mode")
+// MARK: - File-scoped helpers (usable by nested views)
+fileprivate func severityLess(_ a: String, _ b: String) -> Bool {
+    func rank(_ s: String) -> Int {
+        switch s.lowercased() {
+        case "low": return 0
+        case "medium": return 1
+        case "high": return 2
+        default: return -1
         }
+    }
+    return rank(a) < rank(b)
+}
+
+fileprivate func severityColor(_ s: String) -> Color {
+    switch s.lowercased() {
+    case "high": return .red
+    case "medium": return .orange
+    default: return .green
     }
 }
 
+// TODO: Fix the preview once the Product model is defined
+//// MARK: — ResultView Previews
+//struct ResultView_Previews: PreviewProvider {
+//    /// A sample Product matching your model
+//    static var sampleProduct: Product {
+//        Product(
+//            id: UUID().uuidString,
+//            name: "Red Apple",
+//            productType: "Food",
+//            safetyScore: 9,
+//            safetyLevel: "Perfectly Safe",
+//            pros: [
+//                SafetyPoint(id: "1", label: "No allergens", severity: "low", category: "Regulatory")
+//            ],
+//            cons: [
+//                SafetyPoint(id: "2", label: "Wash before use", severity: "medium", category: "Hygiene")
+//            ],
+//            certifications: ["FDA Approved", "Consumer Product Safety Commission", "International Safety Standards"],
+//            hygieneWarnings: [
+//                HygieneWarning(type: "Wash", message: "Rinse under cold water before eating")
+//            ]
+//        )
+//    }
+//
+//    static var previews: some View {
+//        // Build the RecognitionResultViewModel from that product
+//        let vm = RecognitionResultViewModel(
+//            image: UIImage(systemName: "applelogo"),
+//            productName: sampleProduct.name,
+//            category: sampleProduct.productType,
+//            score: sampleProduct.safetyScore,
+//            safetyLabel: sampleProduct.safetyLevel,
+//            safeBenefits: sampleProduct.pros.map(\.label),
+//            safetyConcerns: sampleProduct.cons.map(\.label),
+//            dataSources: sampleProduct.certifications,
+//            date: Date()
+//        )
+//
+//        Group {
+//            ResultView(vm: vm)
+//                .previewDisplayName("Light Mode")
+//            ResultView(vm: vm)
+//                .preferredColorScheme(.dark)
+//                .previewDisplayName("Dark Mode")
+//        }
+//    }
+//}

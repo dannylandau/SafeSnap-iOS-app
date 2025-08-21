@@ -37,6 +37,6 @@ final class HistoryViewModel: ObservableObject {
 
     // Optional for future logic: grouping, filtering, stats
     func scansGroupedByDate() -> [Date: [ScanHistoryItem]] {
-        Dictionary(grouping: records) { Calendar.current.startOfDay(for: $0.date) }
+        Dictionary(grouping: records) { Calendar.current.startOfDay(for: $0.createdAt) }
     }
 }

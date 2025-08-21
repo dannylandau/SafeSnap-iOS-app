@@ -13,27 +13,39 @@ struct SignedInHistoryView: View {
     @State private var sortBy: SortOption = .recent
     @State private var categoryFilter: String = "All"
     @State private var showFilters = false
-    @State private var showingShare = false
+    @State private var sharePayload: SharePayload?
+
+    struct SharePayload: Identifiable { let id = UUID(); let items: [Any] }
 
     enum SortOption: String, CaseIterable {
         case recent = "Recent", safety = "Safety", name = "Name"
     }
 
     private let allCategories: [(emoji: String, label: String)] = [
-        ("📦","All"), ("🍎","Food"), ("🧸","Toys"),
-        ("💄","Beauty"), ("💻","Tech"), ("🟡","Home")
+        ("📦","All"),
+        ("🍎","Food"),
+        ("💄","Cosmetic"),
+        ("🧸","Toy"),
+        ("💻","Electronic"),
+        ("🏠","Household"),
+        ("👕","Clothing"),
+        ("🐶","Animal"),
+        ("💍","Jewelry"),
+        ("💊","Pharmaceutical"),
+        ("🚗","Automotive"),
+        ("❓","Other")
     ]
 
     private var filteredRecords: [ScanHistoryItem] {
         vm.records
-            .filter { categoryFilter == "All" || $0.product.productType == categoryFilter }
+            .filter { categoryFilter == "All" || $0.categoryName == categoryFilter }
             .filter { searchText.isEmpty ||
-                       $0.product.name.localizedCaseInsensitiveContains(searchText) }
+                       $0.productName.localizedCaseInsensitiveContains(searchText) }
             .sorted { a, b in
                 switch sortBy {
-                case .recent:  return a.date > b.date
-                case .safety:  return a.score > b.score
-                case .name:    return a.product.name < b.product.name
+                case .recent:  return a.createdAt > b.createdAt
+                case .safety:  return a.analysis.overallSafetyScore > b.analysis.overallSafetyScore
+                case .name:    return a.productName < b.productName
                 }
             }
     }
@@ -52,14 +64,9 @@ struct SignedInHistoryView: View {
             .animation(.easeInOut, value: showFilters)
             .navigationBarHidden(true)
         }
-        .sheet(isPresented: $showingShare) { shareSheet }
-    }
-    
-    // MARK: — Share Sheet
-    private var shareSheet: some View {
-        ShareSheet(activityItems: [
-            "Check out my SafeSnap history for SafeSnap!"
-        ])
+        .sheet(item: $sharePayload) { payload in
+            ShareSheet(activityItems: payload.items)
+        }
     }
 
     private var headerSection: some View {
@@ -77,7 +84,11 @@ struct SignedInHistoryView: View {
                     .font(.title2).foregroundColor(.green)
             }
             .buttonStyle(.plain)
-            Button { showingShare = true } label: {
+            Button {
+                guard let url = exportAllAsJSON() else { return }
+                let title = "Shared from SafeSnap — \(filteredRecords.count) scans"
+                sharePayload = SharePayload(items: [title, url])
+            } label: {
                 Image(systemName: "square.and.arrow.up")
                     .font(.title2)
             }
@@ -134,18 +145,20 @@ struct SignedInHistoryView: View {
             // Category
             VStack(alignment: .leading, spacing: 8) {
                 Text("Category").font(.subheadline)
-                LazyVGrid(columns: [GridItem(.adaptive(minimum: 80))], spacing: 8) {
+                LazyVGrid(columns: [GridItem(.adaptive(minimum: 120, maximum: 220), spacing: 12)], spacing: 12) {
                     ForEach(allCategories, id: \.label) { emoji, label in
                         let isSel = label == categoryFilter
                         Text("\(emoji) \(label)")
                             .font(.subheadline)
-                            .padding(.horizontal, 12)
-                            .padding(.vertical, 8)
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.85)
+                            .padding(.horizontal, 14)
+                            .padding(.vertical, 10)
                             .background(isSel
                                         ? Color.green
                                         : Color.secondary.opacity(0.1))
                             .foregroundColor(isSel ? .white : .primary)
-                            .cornerRadius(8)
+                            .cornerRadius(10)
                             .onTapGesture { categoryFilter = label }
                     }
                 }
@@ -160,9 +173,9 @@ struct SignedInHistoryView: View {
         HStack(spacing: 12) {
             statCard(title: "Total Scans", value: "\(vm.records.count)")
             statCard(title: "Avg Score",
-                     value: String(format: "%.1f", vm.records.map(\.score).average()))
+                     value: String(format: "%.1f", vm.records.map(\.analysis.overallSafetyScore).average()))
             statCard(title: "Safe Items",
-                     value: "\(vm.records.filter { $0.score >= 7 }.count * 100 / max(1, vm.records.count))%")
+                     value: "\(vm.records.filter { $0.analysis.overallSafetyScore >= 7 }.count * 100 / max(1, vm.records.count))%")
         }
     }
 
@@ -181,51 +194,64 @@ struct SignedInHistoryView: View {
         ScrollView {
             VStack(spacing: 12) {
                 ForEach(filteredRecords) { item in
-                    NavigationLink(value: item) {
+                    NavigationLink {
+                        // Load image if available
+                        let uiImage = loadHistoryImage(from: item.imageRef)
+                        let vm = RecognitionResultViewModel(image: uiImage, from: item)
+                        ResultView(vm: vm)
+                    } label: {
                         recordRow(item: item)
                     }
                     .buttonStyle(.plain)
+                    .swipeActions(edge: .trailing, allowsFullSwipe: true) {
+                        Button {
+                            if let url = exportItemAsJSON(item) {
+                                let title = "Shared from SafeSnap — 1 scan"
+                                sharePayload = SharePayload(items: [title, url])
+                            }
+                        } label: {
+                            Image(systemName: "square.and.arrow.up")
+                        }
+                        .tint(.green)
+                    }
                 }
             }
             .padding(.vertical)
         }
-        .navigationDestination(for: ScanHistoryItem.self) { item in
-            // build a ResultViewVM from the item
-            let vm = RecognitionResultViewModel(
-                image: item.thumbnail,
-                productName: item.product.name,
-                category: item.product.productType,
-                score: item.score,
-                safetyLabel: item.product.safetyLevel,
-                safeBenefits: item.product.pros.map(\.label),
-                safetyConcerns: item.product.cons.map(\.label),
-                dataSources: item.product.certifications,
-                date: item.date
-            )
-            ResultView(vm: vm)
-        }
+    }
+    
+    private func loadHistoryImage(from url: URL?) -> UIImage? {
+        guard let url else { return nil }
+        if let img = UIImage(contentsOfFile: url.path) { return img }
+        if let data = try? Data(contentsOf: url) { return UIImage(data: data) }
+        return nil
     }
 
     private func recordRow(item: ScanHistoryItem) -> some View {
         HStack(spacing: 12) {
-            if let thumb = item.thumbnail {
-                Image(uiImage: thumb)
+            if let url = item.imageRef, let img = UIImage(contentsOfFile: url.path) {
+                Image(uiImage: img)
                     .resizable().scaledToFill()
                     .frame(width: 50, height: 50)
                     .cornerRadius(8)
             } else {
-                Rectangle()
-                    .fill(Color.secondary.opacity(0.1))
-                    .frame(width: 50, height: 50)
-                    .cornerRadius(8)
+                ZStack {
+                    Rectangle()
+                        .fill(Color.secondary.opacity(0.1))
+                    Image(systemName: "photo")
+                        .font(.system(size: 20))
+                        .foregroundColor(.secondary)
+                }
+                .frame(width: 50, height: 50)
+                .cornerRadius(8)
             }
             VStack(alignment: .leading, spacing: 4) {
-                Text(item.product.name).font(.headline)
-                Text(item.date, format: .dateTime.day().month().year())
+                Text(item.productName).font(.headline)
+                Text(item.createdAt, format: .dateTime.day().month().year())
                     .font(.caption).foregroundColor(.secondary)
             }
             Spacer()
-            Text("\(Int(item.score))/10")
+            Text("\(Int(item.analysis.overallSafetyScore))/10")
                 .font(.subheadline.bold())
                 .padding(.horizontal, 8)
                 .padding(.vertical, 4)
@@ -246,6 +272,43 @@ private extension Array where Element == Double {
     func average() -> Double {
         guard !isEmpty else { return 0 }
         return reduce(0, +) / Double(count)
+    }
+}
+
+// MARK: — Export helpers
+private extension SignedInHistoryView {
+    func exportAllAsJSON() -> URL? {
+        do {
+            let encoder = JSONEncoder()
+            encoder.dateEncodingStrategy = .iso8601
+            let data = try encoder.encode(filteredRecords)
+            let url = try writeTemp(data: data, filename: "SafeSnap-History-\(Date().ISO8601Format()).json")
+            return url
+        } catch {
+            print("Export all failed:", error)
+            return nil
+        }
+    }
+
+    func exportItemAsJSON(_ item: ScanHistoryItem) -> URL? {
+        do {
+            let encoder = JSONEncoder()
+            encoder.dateEncodingStrategy = .iso8601
+            let data = try encoder.encode(item)
+            let safeName = item.productName.replacingOccurrences(of: "/", with: "-")
+            let url = try writeTemp(data: data, filename: "SafeSnap-\(safeName)-\(item.createdAt.ISO8601Format()).json")
+            return url
+        } catch {
+            print("Export item failed:", error)
+            return nil
+        }
+    }
+
+    func writeTemp(data: Data, filename: String) throws -> URL {
+        let dir = FileManager.default.temporaryDirectory
+        let url = dir.appendingPathComponent(filename)
+        try data.write(to: url, options: .atomic)
+        return url
     }
 }
 

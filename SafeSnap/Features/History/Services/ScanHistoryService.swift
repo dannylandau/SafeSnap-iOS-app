@@ -5,14 +5,6 @@
 //  Created by Marcin Grześkowiak on 23/07/2025.
 //
 
-
-//
-//  ScanHistoryService.swift
-//  SafeSnap
-//
-//  Created by Marcin Grześkowiak on 23/07/2025.
-//
-
 import Foundation
 import SwiftUI
 
@@ -23,6 +15,7 @@ class ScanHistoryService: ObservableObject {
     @Published private(set) var records: [ScanHistoryItem] = []
 
     private let fileURL: URL
+    private let saveQueue = DispatchQueue(label: "scan.history.save.queue")
 
     // MARK: - Init
 
@@ -56,10 +49,19 @@ class ScanHistoryService: ObservableObject {
 
     // MARK: - Private Persistence
 
-    private func load() {
+    func load() {
         do {
             let data = try Data(contentsOf: fileURL)
-            records = try JSONDecoder().decode([ScanHistoryItem].self, from: data)
+            do {
+                records = try JSONDecoder().decode([ScanHistoryItem].self, from: data)
+            } catch {
+                // Backup corrupt data
+                let backupURL = fileURL.deletingLastPathComponent().appendingPathComponent("scan_history_backup.json")
+                try? data.write(to: backupURL)
+                print("⚠️ Failed to decode scan history, data backed up: \(error.localizedDescription)")
+                records = []
+                return
+            }
         } catch {
             print("⚠️ Failed to load scan history: \(error.localizedDescription)")
             records = []
@@ -68,7 +70,8 @@ class ScanHistoryService: ObservableObject {
 
     private func save() {
         let fileURL = self.fileURL
-        DispatchQueue.global(qos: .background).async { [records] in
+        let records = self.records
+        saveQueue.async {
             do {
                 let data = try JSONEncoder().encode(records)
                 try data.write(to: fileURL, options: [.atomic])
@@ -95,5 +98,24 @@ class ScanHistoryService: ObservableObject {
                 continuation.resume()
             }
         }
+    }
+    
+    // MARK: - Thumbnail Persistence
+    private func thumbnailPath(for id: UUID) -> URL {
+        fileURL.deletingLastPathComponent().appendingPathComponent("thumbnails/\(id).jpg")
+    }
+
+    private func saveThumbnail(_ image: UIImage, for id: UUID) {
+        let path = thumbnailPath(for: id)
+        try? FileManager.default.createDirectory(at: path.deletingLastPathComponent(), withIntermediateDirectories: true)
+        try? image.jpegData(compressionQuality: 0.5)?.write(to: path)
+    }
+
+    private func loadThumbnail(for id: UUID) -> UIImage? {
+        let path = thumbnailPath(for: id)
+        if let data = try? Data(contentsOf: path) {
+            return UIImage(data: data)
+        }
+        return nil
     }
 }

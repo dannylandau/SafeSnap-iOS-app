@@ -13,15 +13,18 @@ import Clerk
 final class AppDependencies {
     // Shared instances
     let historyService: ScanHistoryService
-    let analysisService: ImageAnalysisService
+    let visionService: VisionService
+    let openAIService: OpenAIService
     let userSession: UserSession
     private let clerk: Clerk
 
     init(clerk: Clerk) {
         self.clerk = clerk
         self.historyService = ScanHistoryService()
-        self.analysisService = MockImageAnalysisService()
+        self.historyService.load()
         self.userSession = ClerkUserSession(clerk: clerk)
+        self.openAIService = OpenAIService(apiKey: Bundle.main.infoDictionaryValue(for: "OpenAIAPIKey")!) // TODO: Handle missing key gracefully
+        self.visionService = VisionService(apiKey: Bundle.main.infoDictionaryValue(for: "GoogleVisionAPIKey")!) // TODO: Handle missing key gracefully
     }
 
     // Shared access point
