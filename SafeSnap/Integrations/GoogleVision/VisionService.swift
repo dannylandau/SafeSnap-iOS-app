@@ -1,4 +1,6 @@
 import Foundation
+import CoreGraphics
+import UIKit
 
 struct VisionLabelResult: Decodable {
     let labelAnnotations: [Annotation]?
@@ -170,32 +172,22 @@ struct VisionLabelResult: Decodable {
         if !bestGuess.isEmpty { confidence += 0.1 }
         confidence = min(confidence, 0.95)
 
+        print("🛍️ Classified as \(categoryName) (\(bestType)), product: \(productName), confidence: \(String(format: "%.2f", confidence)), specificType: \(clean(specificType)), brands: \(brands), labels: \(labelStrings.prefix(5)), webEntities: \(webEntities.prefix(5)), objects: \(objects.prefix(3)), bestGuess: \(bestGuess), detectedText: \(detectedText ?? "nil")")
+        
         return ProductIdentification(
+            productType: categoryName,
             productName: productName,
-            categoryName: categoryName,
-            specificType: clean(specificType),
-            productType: bestType,
-            brand: brands.first,
-            confidence: confidence,
-            labels: sortedLabels.map { $0.description },
+            brandCandidates: brands,
+            labels: labelStrings,
+            objects: sortedLabels.map { $0.description },
             detectedText: detectedText,
-            objects: objects,
-            webEntities: webEntities
+            confidence: confidence
         )
     }
 }
 
-struct ProductIdentification {
-    let productName: String
-    let categoryName: String
-    let specificType: String
-    let productType: String
-    let brand: String?
-    let confidence: Double
-    let labels: [String]
-    let detectedText: String?
-    let objects: [String]?
-    let webEntities: [String]?
+public protocol VisionServiceType {
+    func recognizeProduct(from image: CGImage) async throws -> ProductGuess
 }
 
 enum VisionError: Error {
@@ -205,7 +197,7 @@ enum VisionError: Error {
     case noProductFound
 }
 
-final class VisionService {
+final class VisionService: VisionServiceType {
     private let apiKey: String
 
     init(apiKey: String) {
@@ -366,26 +358,24 @@ final class VisionService {
         // Lightweight classification summary (reusing our classifier)
         let classifier = VisionLabelResult(labelAnnotations: nil)
         let classification: ProductIdentification = (try? classifier.classifyProduct(from: visionData)) ?? ProductIdentification(
+            productType: "ProductType - Unknown",
             productName: "Product - Unknown",
-            categoryName: "Product",
-            specificType: "Unknown",
-            productType: "other",
-            brand: brands.first,
-            confidence: 0,
+//            specificType: "Unknown",
+            brandCandidates: brands,
             labels: labels.map { $0.description },
-            detectedText: trimmedText.isEmpty ? nil : trimmedText,
             objects: topObjects.compactMap { $0["name"] as? String },
-            webEntities: topEntities.compactMap { $0["description"] as? String }
+            detectedText: trimmedText.isEmpty ? nil : trimmedText,
+            confidence: 0
         )
 
         // Build compact dictionary
         var payload: [String: Any] = [
             "summary": [
                 "productName": classification.productName,
-                "categoryName": classification.categoryName,
-                "specificType": classification.specificType,
+                "categoryName": classification.productType,
+//                "specificType": classification.specificType,
                 "productType": classification.productType,
-                "brand": classification.brand as Any,
+                "brand": classification.brandCandidates.first as Any,
                 "confidence": classification.confidence
             ],
             "signals": [
@@ -420,5 +410,30 @@ final class VisionService {
         #endif
 
         return jsonData
+    }
+    /// Recognize product name/type from a CGImage using Google Vision and our classifier.
+    /// - Returns: `ProductGuess` with name, type, confidence, and first brand candidate if available.
+    public func recognizeProduct(from image: CGImage) async throws -> ProductGuess {
+        // 1) Encode CGImage to JPEG data
+        guard let jpeg = UIImage(cgImage: image).jpegData(compressionQuality: 0.9) else {
+            throw VisionError.invalidImageData
+        }
+
+        // 2) Call Vision API
+        let raw = try await detectProducts(in: jpeg)
+
+        // 3) Classify using existing heuristics
+        let classifier = VisionLabelResult(labelAnnotations: nil)
+        let identification = try classifier.classifyProduct(from: raw)
+
+        // 4) Map to ProductGuess expected by the app
+        let brand = identification.brandCandidates.first
+        let confidence = max(0.0, min(1.0, identification.confidence))
+        return ProductGuess(
+            name: identification.productName,
+            type: identification.productType,
+            confidence: confidence,
+            brand: brand
+        )
     }
 }
