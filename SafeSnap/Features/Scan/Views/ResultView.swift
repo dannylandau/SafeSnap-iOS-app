@@ -39,9 +39,12 @@ struct ResultView: View {
             shareButton()
             imageCard()
             headerBar()
-            safetyBadge()
+            scoresRow()
+//            safetyBadge()
             kidSafetySection()
-            petSafetySection()
+            if vm.includeCats || vm.includeDogs {
+                petSafetySection()
+            }
             dataSourcesSection()
             timestampFooter()
         }
@@ -82,6 +85,66 @@ struct ResultView: View {
         }
     }
 
+    // MARK: — Score Ring
+    private struct ScoreRing: View {
+        enum LabelPlacement { case below, beside }
+        let title: String
+        let score10: Int  // 0–10
+        let labelPlacement: LabelPlacement
+        private var progress: Double { min(1.0, max(0.0, Double(score10) / 10.0)) }
+
+        var body: some View {
+            Group {
+                switch labelPlacement {
+                case .below:
+                    VStack(spacing: 6) {
+                        ring
+                        Text("Safety Score")
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
+                        Text(title)
+                            .font(.footnote).bold()
+                    }
+                    .accessibilityElement(children: .combine)
+                    .accessibilityLabel(Text("\(title) safety score \(score10) out of 10"))
+
+                case .beside:
+                    HStack(spacing: 10) {
+                        ring
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("Safety Score")
+                                .font(.caption2)
+                                .foregroundStyle(.secondary)
+                            Text(title)
+                                .font(.footnote).bold()
+                        }
+                    }
+                    .accessibilityElement(children: .combine)
+                    .accessibilityLabel(Text("\(title) safety score \(score10) out of 10"))
+                }
+            }
+        }
+
+        private var ring: some View {
+            ZStack {
+                Circle()
+                    .trim(from: 0, to: 1)
+                    .stroke(Color.secondary.opacity(0.15), style: StrokeStyle(lineWidth: 10, lineCap: .round))
+                    .rotationEffect(.degrees(-90))
+                    .frame(width: 64, height: 64)
+                Circle()
+                    .trim(from: 0, to: progress)
+                    .stroke(scoreColor(score10), style: StrokeStyle(lineWidth: 10, lineCap: .round))
+                    .rotationEffect(.degrees(-90))
+                    .frame(width: 64, height: 64)
+                Text("\(score10)/10")
+                    .font(.footnote).bold()
+                    .monospacedDigit()
+                    .foregroundColor(scoreColor(score10))
+            }
+        }
+    }
+
     // MARK: — Header Bar
     private func headerBar() -> some View {
         HStack {
@@ -94,42 +157,70 @@ struct ResultView: View {
                     .foregroundColor(.white.opacity(0.8))
             }
             Spacer()
-            VStack(alignment: .trailing) {
-                Text("\(vm.score)/10")
-                    .font(.largeTitle.bold())
-                    .foregroundColor(.white)
-                Text("Safety Score")
-                    .font(.caption)
-                    .foregroundColor(.white.opacity(0.8))
-            }
+            // Scores moved to dedicated row below
         }
         .padding()
         .frame(maxWidth: .infinity)
-        .background(LinearGradient(
-            gradient: Gradient(colors: [.green.opacity(0.8), .green]),
-            startPoint: .topLeading,
-            endPoint: .bottomTrailing
-          ))
+        .background(
+            LinearGradient(
+                gradient: Gradient(colors: [scoreColor(score10(fromHundred: vm.analysis.childSafetyScore)).opacity(0.8),
+                                             scoreColor(score10(fromHundred: vm.analysis.childSafetyScore))]),
+                startPoint: .topLeading,
+                endPoint: .bottomTrailing
+            )
+        )
         .cornerRadius(12)
         .padding(.horizontal)
     }
 
-    // MARK: — Safety Badge
-    private func safetyBadge() -> some View {
-        HStack {
-            Image(systemName: "checkmark.circle.fill")
-            Text(vm.safetyLabel)
+    // MARK: — Scores Row (Kids / Dogs / Cats)
+    private func scoresRow() -> some View {
+        // Pull scores from the analysis (0–100) and convert to /10
+        let analysis = vm.analysis
+        let child10 = score10(fromHundred: analysis.childSafetyScore)
+        let dog10: Int? = analysis.dogSafetyScore.map { score10(fromHundred: $0) }
+        let cat10: Int? = analysis.catSafetyScore.map { score10(fromHundred: $0) }
+
+        // Show dog/cat rings if present in analysis OR toggled by the user
+        let showDog = vm.includeDogs
+        let showCat = vm.includeCats
+
+        // Build items tuple array (title, score)
+        var items: [(String, Int, ScoreRing.LabelPlacement)] = [("Kids", child10, .below)]
+        if showDog { items.append(("Dogs", dog10 ?? 0, .below)) }
+        if showCat { items.append(("Cats", cat10 ?? 0, .below)) }
+
+        // With 2 items, place labels beside rings for a tighter layout
+        if items.count == 2 {
+            items = items.map { ($0.0, $0.1, .beside) }
         }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 8)
-        .background(Color.green.opacity(0.15))
-        .foregroundColor(.green)
-        .cornerRadius(12)
+
+        // Equal-width columns: each item takes the same horizontal space, centered.
+        return HStack(spacing: 0) {
+            ForEach(Array(items.enumerated()), id: \.offset) { _, item in
+                ScoreRing(title: item.0, score10: item.1, labelPlacement: item.2)
+                    .frame(maxWidth: .infinity, alignment: .center)
+            }
+        }
+        .padding(.horizontal)
+        .padding(.bottom, 4)
     }
+
+//    // MARK: — Safety Badge
+//    private func safetyBadge() -> some View {
+//        HStack {
+//            Image(systemName: "checkmark.circle.fill")
+//            Text(vm.safetyLabel)
+//        }
+//        .padding(.horizontal, 16)
+//        .padding(.vertical, 8)
+//        .background(Color.green.opacity(0.15))
+//        .foregroundColor(.green)
+//        .cornerRadius(12)
+//    }
 
     // MARK: — Pet Safety
     private func petSafetySection() -> some View {
-        
         VStack(spacing: 8) {
             // Header
             VStack(alignment: .center, spacing: 4) {
@@ -137,7 +228,7 @@ struct ResultView: View {
                     Image(systemName: "pawprint.fill")
                     Text("Pet Safety").font(.headline)
                 }
-                Text("Dog & cat specific warnings based on the analysis")
+                Text("Dog and/or cat specific warnings based on the analysis")
                     .font(.subheadline)
                     .foregroundColor(.secondary)
             }
@@ -149,9 +240,13 @@ struct ResultView: View {
             // Body
             VStack(alignment: .leading, spacing: 12) {
                 // Dogs
-                petColumn(title: "Dogs", warnings: vm.dogWarnings)
+                if vm.includeDogs {
+                    petColumn(title: "Dogs", warnings: vm.dogWarnings)
+                }
                 // Cats
-                petColumn(title: "Cats", warnings: vm.catWarnings)
+                if vm.includeCats {
+                    petColumn(title: "Cats", warnings: vm.catWarnings)
+                }
             }
             .padding([.horizontal, .bottom])
         }
@@ -287,7 +382,8 @@ struct ResultView: View {
     private func prepareShare() {
         var items: [Any] = []
 
-        let summary = "SafeSnap — \(vm.productName) (\(vm.category)) — Safety: \(vm.score)/10"
+        let child10 = score10(fromHundred: vm.analysis.childSafetyScore)
+        let summary = "SafeSnap — \(vm.productName) (\(vm.category)) — Safety: \(child10)/10 (Kids)"
         items.append(summary)
 
         if let ui = vm.image { items.append(ui) }
@@ -365,6 +461,19 @@ fileprivate func severityColor(_ s: String) -> Color {
     case "medium": return .orange
     default: return .green
     }
+}
+
+fileprivate func scoreColor(_ score10: Int) -> Color {
+    // >7 green, <4 red, otherwise orange
+    if score10 > 7 { return .green }
+    if score10 < 4 { return .red }
+    return .orange
+}
+
+fileprivate func score10(fromHundred value: Int) -> Int {
+    // Convert 0–100 → 0–10 with rounding
+    let clamped = max(0, min(100, value))
+    return Int(round(Double(clamped) / 10.0))
 }
 
 // TODO: Fix the preview once the Product model is defined

@@ -14,19 +14,13 @@ import Foundation
 
 /// Mirrors the web SafetyAnalysisRequest
 public struct SafetyAnalysisRequest: Codable, Equatable {
-    public let productName: String
-    public let productType: String
     public let includeDogs: Bool
     public let includeCats: Bool
     public let includeChildren: Bool
 
-    public init(productName: String,
-                productType: String,
-                includeDogs: Bool,
+    public init(includeDogs: Bool,
                 includeCats: Bool,
                 includeChildren: Bool) {
-        self.productName = productName
-        self.productType = productType
         self.includeDogs = includeDogs
         self.includeCats = includeCats
         self.includeChildren = includeChildren

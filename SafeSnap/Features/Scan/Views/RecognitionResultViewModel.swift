@@ -19,6 +19,8 @@ struct RecognitionResultViewModel: Identifiable {
     let date: Date
     // Keep the structured response
     let analysis: SafetyAnalysisResponse
+    let includeDogs: Bool
+    let includeCats: Bool
     
     // ResultView needs these:
     var dogWarnings: [(severity: String, warning: String, reason: String)] {
@@ -41,7 +43,9 @@ extension RecognitionResultViewModel {
             safetyConcerns: item.analysis.generalSafety.cons.map { $0.label },
             dataSources: item.analysis.recalls.map { $0.source },
             date: item.createdAt,
-            analysis: item.analysis
+            analysis: item.analysis,
+            includeDogs: item.userToggles.includeDogs,
+            includeCats: item.userToggles.includeCats
         )
     }
 

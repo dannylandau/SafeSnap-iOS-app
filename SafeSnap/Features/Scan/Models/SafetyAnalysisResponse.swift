@@ -9,20 +9,51 @@ import SwiftUI
 
 /// Mirrors the web SafetyAnalysisResponse
 public struct SafetyAnalysisResponse: Codable, Equatable {
+    public var productName: String
+    public var productType: String
+    
+    // Displayed in UI: mirrors current scope (child vs selected pet)
     public var overallSafetyScore: Int
+    
+    // Already present
+    public var childSafetyScore: Int                // 0–100 (human child)
+    public var animalSafetyScore: Int               // legacy aggregate; derive from dog/cat if missing
+    
+    public var dogSafetyScore: Int?                 // 0–100
+    public var catSafetyScore: Int?                 // 0–100
+    
+    // Confidence
+    public var modelConfidence: Double              // 0.0–1.0
+    public var recognitionConfidence: Double        // 0.0–1.0
+    
+    // Existing detail sections
     public var generalSafety: GeneralSafety
     public var petSafety: PetSafety
     public var hygieneWarnings: [HygieneWarning]
     public var recalls: [Recall]
 
-    public init(
-        overallSafetyScore: Int,
-        generalSafety: GeneralSafety,
-        petSafety: PetSafety,
-        hygieneWarnings: [HygieneWarning],
-        recalls: [Recall]
-    ) {
+    public init(productName: String,
+                productType: String,
+                overallSafetyScore: Int,
+                childSafetyScore: Int,
+                animalSafetyScore: Int,
+                dogSafetyScore: Int,
+                catSafetyScore: Int,
+                modelConfidence: Double,
+                recognitionConfidence: Double,
+                generalSafety: GeneralSafety,
+                petSafety: PetSafety,
+                hygieneWarnings: [HygieneWarning],
+                recalls: [Recall]) {
+        self.productName = productName
+        self.productType = productType
         self.overallSafetyScore = overallSafetyScore
+        self.childSafetyScore = childSafetyScore
+        self.animalSafetyScore = animalSafetyScore
+        self.dogSafetyScore = dogSafetyScore
+        self.catSafetyScore = catSafetyScore
+        self.modelConfidence = modelConfidence
+        self.recognitionConfidence = recognitionConfidence
         self.generalSafety = generalSafety
         self.petSafety = petSafety
         self.hygieneWarnings = hygieneWarnings
@@ -106,6 +137,22 @@ extension SafetyAnalysisResponse.PetSafety {
 
     var isDogSafe: Bool { dogMaxSeverity == nil || dogMaxSeverity == .low }
     var isCatSafe: Bool { catMaxSeverity == nil || catMaxSeverity == .low }
+}
+
+// Lightweight migration helper — call after decoding any response
+extension SafetyAnalysisResponse {
+    public mutating func backfillAnimalScoresIfNeeded() {
+        // If the new scores are missing, approximate from legacy animalSafetyScore
+        if dogSafetyScore == nil && catSafetyScore == nil {
+            dogSafetyScore = animalSafetyScore
+            catSafetyScore = animalSafetyScore
+        }
+        // Keep legacy field coherent for older UI/exports
+        if let d = dogSafetyScore, let c = catSafetyScore {
+            // Conservative aggregate (worst-case)
+            self.animalSafetyScore = min(d, c)
+        }
+    }
 }
 
 func severityRank(_ a: Severity, _ b: Severity) -> Bool {

@@ -9,20 +9,22 @@ import SwiftUI
 import PhotosUI
 
 enum ScanPhase: Equatable {
-        case idle
-        case analyzing(image: UIImage)
-        case result(RecognitionResultViewModel)
-        
-        
-        static func == (lhs: ScanPhase, rhs: ScanPhase) -> Bool {
-            switch (lhs, rhs) {
-            case (.idle, .idle): return true
-            case (.analyzing, .analyzing): return true
-            case (.result, .result): return true
-            default: return false
-            }
+    case idle
+    case analyzing(image: UIImage)
+    case result(RecognitionResultViewModel)
+    case error
+    
+    
+    static func == (lhs: ScanPhase, rhs: ScanPhase) -> Bool {
+        switch (lhs, rhs) {
+        case (.idle, .idle): return true
+        case (.analyzing, .analyzing): return true
+        case (.result, .result): return true
+        case (.error, .error): return true
+        default: return false
         }
     }
+}
 
 struct ScanView: View {
     // removed EnvironmentObject; not needed anymore
@@ -32,11 +34,11 @@ struct ScanView: View {
     @State private var activeSheet: ActiveSheet? = nil
     @State private var showPetOptions = false
     @State private var selectedPhoto: PhotosPickerItem?
-
+    
     init(viewModel: ScanViewModel) {
         _viewModel = StateObject(wrappedValue: viewModel)
     }
-
+    
     var body: some View {
         ZStack {
             ScrollView(showsIndicators: false) {
@@ -86,10 +88,10 @@ struct ScanView: View {
             )
         }
     }
-
+    
     // Computed property to check if the current phase is analyzing
     // (moved to ScanPhase extension below)
-
+    
     private var scanLogo: some View {
         Circle()
             .fill(LinearGradient(
@@ -105,7 +107,7 @@ struct ScanView: View {
             )
             .shadow(color: Color.black.opacity(0.15), radius: 10, x: 0, y: 4)
     }
-
+    
     private var scanTitles: some View {
         VStack(spacing: 4) {
             Text("SafeSnap").font(.largeTitle.bold())
@@ -114,7 +116,7 @@ struct ScanView: View {
                 .foregroundColor(.secondary)
         }
     }
-
+    
     private var scanStatusBadge: some View {
         Label("Google Vision Active", systemImage: "eye")
             .padding(.horizontal, 16)
@@ -123,11 +125,11 @@ struct ScanView: View {
             .foregroundColor(.green)
             .clipShape(Capsule())
     }
-
+    
     private var scanCategoryPills: some View {
         WrapPillsView(pills: PillData.default).padding(.horizontal)
     }
-
+    
     private var scanActions: some View {
         Button {
             activeSheet = .camera
@@ -142,7 +144,7 @@ struct ScanView: View {
         }
         .padding(.horizontal)
     }
-
+    
     private var scanPhotoPicker: some View {
         PhotosPicker(
             selection: $selectedPhoto,
@@ -160,9 +162,9 @@ struct ScanView: View {
         .padding(.horizontal)
         .onChange(of: selectedPhoto) { oldItem, newItem in
             guard let item = newItem else {
-                    print("⚠️ selectedPhoto is nil — likely user cancelled or selection failed")
-                    return
-                }
+                print("⚠️ selectedPhoto is nil — likely user cancelled or selection failed")
+                return
+            }
             
             Task {
                 do {
@@ -178,14 +180,14 @@ struct ScanView: View {
             }
         }
     }
-
+    
     private var scanInstructions: some View {
         Text("Take a photo or choose from your photo gallery")
             .font(.footnote)
             .multilineTextAlignment(.center)
             .foregroundColor(.secondary)
     }
-
+    
     private var petSafetyAccordion: some View {
         VStack(spacing: 0) {
             Button {
@@ -213,7 +215,7 @@ struct ScanView: View {
 private struct PetOptionsView: View {
     @Binding var includeDog: Bool
     @Binding var includeCat: Bool
-
+    
     var body: some View {
         VStack(spacing: 16) {
             Toggle(isOn: $includeDog) {
@@ -229,7 +231,7 @@ private struct PetOptionsView: View {
                 }
             }
             .toggleStyle(SwitchToggleStyle(tint: .orange))
-
+            
             Toggle(isOn: $includeCat) {
                 Label {
                     VStack(alignment: .leading, spacing: 2) {
@@ -243,7 +245,7 @@ private struct PetOptionsView: View {
                 }
             }
             .toggleStyle(SwitchToggleStyle(tint: .purple))
-
+            
             VStack(alignment: .leading, spacing: 8) {
                 HStack(spacing: 8) {
                     Image(systemName: "info.circle")
