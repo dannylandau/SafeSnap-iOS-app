@@ -33,9 +33,33 @@
 		7DBA4AC72E0DEA1800CB1313 /* SafeSnapUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = SafeSnapUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
+/* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
+		7D89CC732E65A16800042491 /* Exceptions for "SafeSnap" folder in "SafeScan" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				"Shared/Extensions/Task+Extensions.swift",
+			);
+			target = 7DBA4AAF2E0DEA1700CB1313 /* SafeScan */;
+		};
+/* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
+
+/* Begin PBXFileSystemSynchronizedGroupBuildPhaseMembershipExceptionSet section */
+		7D89CC742E65A16800042491 /* Exceptions for "SafeSnap" folder in "Copy Bundle Resources" phase from "SafeScan" target */ = {
+			isa = PBXFileSystemSynchronizedGroupBuildPhaseMembershipExceptionSet;
+			buildPhase = 7DBA4AAE2E0DEA1700CB1313 /* Resources */;
+			membershipExceptions = (
+				"Shared/Extensions/Task+Extensions.swift",
+			);
+		};
+/* End PBXFileSystemSynchronizedGroupBuildPhaseMembershipExceptionSet section */
+
 /* Begin PBXFileSystemSynchronizedRootGroup section */
 		7DBA4AB22E0DEA1700CB1313 /* SafeSnap */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+				7D89CC732E65A16800042491 /* Exceptions for "SafeSnap" folder in "SafeScan" target */,
+				7D89CC742E65A16800042491 /* Exceptions for "SafeSnap" folder in "Copy Bundle Resources" phase from "SafeScan" target */,
+			);
 			path = SafeSnap;
 			sourceTree = "<group>";
 		};
@@ -408,7 +432,7 @@
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 2;
+				CURRENT_PROJECT_VERSION = 3;
 				DEVELOPMENT_TEAM = H56SLCRAL5;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
@@ -445,7 +469,7 @@
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 2;
+				CURRENT_PROJECT_VERSION = 3;
 				DEVELOPMENT_TEAM = H56SLCRAL5;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;

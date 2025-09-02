@@ -12,7 +12,7 @@ import SwiftUI
 final class ScanViewModel: ObservableObject {
     
     @Published var resultVM: RecognitionResultViewModel? = nil
-    @Published var scanStep: ScanStepPhase = .preparing
+//    @Published var scanStep: ScanStepPhase = .preparing
     
     @Published var phase: ScanPhase = .idle
 
@@ -32,7 +32,7 @@ final class ScanViewModel: ObservableObject {
 
     func handleImage(_ image: UIImage) {
         Task { @MainActor in
-            self.scanStep = .preparing
+//            self.scanStep = .preparing
             self.resultVM = nil
             self.phase = .analyzing(image: image)
         }
@@ -55,9 +55,13 @@ final class ScanViewModel: ObservableObject {
                     }
                 }
             } catch let error as ScanError {
-                await MainActor.run { self.scanError = error }
+                await MainActor.run {
+                    self.phase = .error
+                    self.scanError = error
+                }
             } catch {
                 await MainActor.run {
+                    self.phase = .error
                     self.scanError = .openAIFailed(reason: error.localizedDescription)
                 }
             }

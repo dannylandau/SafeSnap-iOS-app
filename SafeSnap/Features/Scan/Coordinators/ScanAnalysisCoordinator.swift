@@ -8,26 +8,18 @@
 
 import Foundation
 import SwiftUI
+import CoreGraphics
 
 enum ScanError: Identifiable, Error {
-    case visionFailed
     case openAIFailed(reason: String)
-    case missingDetectionData
-    case missingClassification
     case missingOpenAIResult
 
     var id: String { localizedDescription }
 
     var localizedDescription: String {
         switch self {
-        case .visionFailed:
-            return "We couldn’t recognize anything in the image. Try a clearer photo."
         case .openAIFailed(let reason):
             return "Analysis failed: \(reason)"
-        case .missingDetectionData:
-            return "Detection data is missing."
-        case .missingClassification:
-            return "Classification data is missing."
         case .missingOpenAIResult:
             return "OpenAI result is missing."
         }
@@ -36,17 +28,17 @@ enum ScanError: Identifiable, Error {
 
 @MainActor
 final class ScanAnalysisCoordinator: ObservableObject {
-    @Published var currentPhase: ScanStepPhase = .preparing
+    @Published var currentPhase: AnalysisPhase = .preparing
     @Published var isComplete: Bool = false
 
     private let visionService: VisionService
     private let openAIService: OpenAIService
     private let historyService: ScanHistoryService
+    private let analyzer: SafetyAnalyzer
 
-    private var productId: ProductIdentification?
-    private var detectionData: Data?
     private var safetyAnalysis: SafetyAnalysisResponse?
     private var thumbnail: UIImage?
+    private var currentRequest: SafetyAnalysisRequest?
     
     private var includeDog: Bool = false
     private var includeCat: Bool = false
@@ -58,6 +50,7 @@ final class ScanAnalysisCoordinator: ObservableObject {
         self.visionService = visionService
         self.openAIService = openAIService
         self.historyService = historyService
+        self.analyzer = SafetyAnalyzer(vision: visionService, openAI: openAIService)
     }
 
     func start(with imageData: Data, thumbnail: UIImage?, includeDog: Bool, includeCat: Bool, includeChildren: Bool) async throws {
@@ -66,7 +59,14 @@ final class ScanAnalysisCoordinator: ObservableObject {
         self.includeCat = includeCat
         self.includeChildren = includeChildren
 
-        let pipeline: [ScanStepPhase] = [.preparing, .vision, .openAI, .report]
+        // Build a request snapshot for history toggles; analyzer handles Vision + OpenAI orchestration
+        self.currentRequest = SafetyAnalysisRequest(
+            includeDogs: includeDog,
+            includeCats: includeCat,
+            includeChildren: includeChildren
+        )
+
+        let pipeline: [AnalysisPhase] = [.preparing, .openAI, .report]
         for phase in pipeline {
             guard !Task.isCancelled else {
                 print("⚠️ Task was cancelled — exiting coordinator early")
@@ -86,80 +86,95 @@ final class ScanAnalysisCoordinator: ObservableObject {
         isComplete = true
     }
 
-    func perform(_ phase: ScanStepPhase, imageData: Data) async throws {
+    func perform(_ phase: AnalysisPhase, imageData: Data) async throws {
         switch phase {
         case .preparing:
             break
-        case .vision:
-            detectionData = try await visionService.detectProducts(in: imageData)
-            
-            guard let detectionData else { throw ScanError.missingDetectionData }
-            
-            let id = try VisionLabelResult(labelAnnotations: nil).classifyProduct(from: detectionData)
-            self.productId = id
-        case .detecting:
-            break
         case .openAI:
-            guard let detectionData = detectionData else { throw ScanError.missingDetectionData }
-            guard let id = productId else { throw ScanError.missingClassification }
             do {
-                let compact = try visionService.sanitizedOpenAIData(from: detectionData)
-                
-                let req = SafetyAnalysisRequest(
-                    productName: id.productName,
-                    productType: id.productType,
+                let req = currentRequest ?? SafetyAnalysisRequest(
                     includeDogs: includeDog,
                     includeCats: includeCat,
                     includeChildren: includeChildren
                 )
-                
-                let analysis = try await openAIService.generateSafetyAnalysis(req, context: compact)
+
+                // Map UI toggles to analyzer options
+                let includePetSafety = includeDog || includeCat
+                let petPreference: PetPreference = {
+                    switch (includeDog, includeCat) {
+                    case (true, true): return .both
+                    case (true, false): return .dog
+                    case (false, true): return .cat
+                    default: return .none
+                    }
+                }()
+
+                // Convert image bytes -> CGImage
+                guard let uiImage = UIImage(data: imageData), let cgImage = uiImage.cgImage else {
+                    throw NSError(domain: "SafeSnap", code: -11, userInfo: [NSLocalizedDescriptionKey: "Input data is not a valid image"])
+                }
+
+                // Run analyzer: Vision recognition -> fast model -> optional smart model
+                let analysis = try await analyzer.run(
+                    image: cgImage,
+                    options: .init(includePetSafety: includePetSafety, petPreference: petPreference)
+                )
+
                 self.safetyAnalysis = analysis
             } catch {
                 throw ScanError.openAIFailed(reason: error.localizedDescription)
             }
-        case .identify, .databases, .openAISafety, .petSafety:
-            break // future implementation
         case .report:
             guard let analysis = safetyAnalysis else { throw ScanError.missingOpenAIResult }
-            guard let id = productId else { throw ScanError.missingClassification }
-
-            // Build compact signals summary (from classification)
-            let signals = ScanHistoryItem.SignalsSummary(
-                labels: Array(id.labels.prefix(5)),
-                objects: Array((id.objects ?? []).prefix(3)),
-                webEntities: Array((id.webEntities ?? []).prefix(5)),
-                bestGuess: nil,
-                detectedTextExcerpt: {
-                    if let t = id.detectedText, !t.isEmpty { return t.count > 200 ? String(t.prefix(200)) + "…" : t }
-                    return nil
-                }()
+            let req = currentRequest ?? SafetyAnalysisRequest(
+                includeDogs: includeDog,
+                includeCats: includeCat,
+                includeChildren: includeChildren
             )
 
-            // User toggles snapshot
+            // Signals are empty for now (Vision removed). Consider extending analysis to fill these later.
+            let signals = ScanHistoryItem.SignalsSummary(
+                labels: [],
+                objects: [],
+                webEntities: [],
+                bestGuess: nil,
+                detectedTextExcerpt: nil
+            )
+
             let toggles = ScanHistoryItem.UserToggles(
                 includeDogs: includeDog,
                 includeCats: includeCat,
                 includeChildren: includeChildren
             )
 
-            // Persist image to disk so history can load it
             let imageURL = try? persistScanImage(imageData)
 
-            // Persist canonical snapshot
+            // Minimal ProductIdentification synthesized from the analysis (Vision confidence now available)
+            let product = ProductIdentification(
+                productType: analysis.productType,
+                productName: analysis.productName,
+                brandCandidates: [],
+                labels: [],
+                objects: [],
+                detectedText: nil,
+                confidence: analysis.recognitionConfidence
+            )
+
             let item = ScanHistoryBuilder.build(
-                product: id,
+                product: product,
                 analysis: analysis,
                 imageRef: imageURL,
                 imageData: imageData,
                 userToggles: toggles,
                 signals: signals,
                 visionContextRef: nil,
-                model: "gpt-4o",
-                promptVersion: "v1"
+                model: "gpt-5",
+                promptVersion: "v2"
             )
             historyService.add(item)
             self.latestHistoryItem = item
+        default:
+            break
         }
     }
     
