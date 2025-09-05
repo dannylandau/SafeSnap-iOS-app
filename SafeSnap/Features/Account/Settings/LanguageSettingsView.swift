@@ -5,8 +5,6 @@
 //  Created by Marcin Grześkowiak on 14/07/2025.
 //
 
-
-// LanguageSettingsView.swift
 import SwiftUI
 
 struct LanguageSettingsView: View {

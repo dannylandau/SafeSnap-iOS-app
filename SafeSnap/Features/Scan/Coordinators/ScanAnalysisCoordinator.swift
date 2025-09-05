@@ -92,14 +92,7 @@ final class ScanAnalysisCoordinator: ObservableObject {
             break
         case .openAI:
             do {
-                let req = currentRequest ?? SafetyAnalysisRequest(
-                    includeDogs: includeDog,
-                    includeCats: includeCat,
-                    includeChildren: includeChildren
-                )
-
                 // Map UI toggles to analyzer options
-                let includePetSafety = includeDog || includeCat
                 let petPreference: PetPreference = {
                     switch (includeDog, includeCat) {
                     case (true, true): return .both
@@ -117,7 +110,7 @@ final class ScanAnalysisCoordinator: ObservableObject {
                 // Run analyzer: Vision recognition -> fast model -> optional smart model
                 let analysis = try await analyzer.run(
                     image: cgImage,
-                    options: .init(includePetSafety: includePetSafety, petPreference: petPreference)
+                    options: .init(petPreference: petPreference)
                 )
 
                 self.safetyAnalysis = analysis
@@ -126,20 +119,6 @@ final class ScanAnalysisCoordinator: ObservableObject {
             }
         case .report:
             guard let analysis = safetyAnalysis else { throw ScanError.missingOpenAIResult }
-            let req = currentRequest ?? SafetyAnalysisRequest(
-                includeDogs: includeDog,
-                includeCats: includeCat,
-                includeChildren: includeChildren
-            )
-
-            // Signals are empty for now (Vision removed). Consider extending analysis to fill these later.
-            let signals = ScanHistoryItem.SignalsSummary(
-                labels: [],
-                objects: [],
-                webEntities: [],
-                bestGuess: nil,
-                detectedTextExcerpt: nil
-            )
 
             let toggles = ScanHistoryItem.UserToggles(
                 includeDogs: includeDog,
@@ -166,7 +145,6 @@ final class ScanAnalysisCoordinator: ObservableObject {
                 imageRef: imageURL,
                 imageData: imageData,
                 userToggles: toggles,
-                signals: signals,
                 visionContextRef: nil,
                 model: "gpt-5",
                 promptVersion: "v2"

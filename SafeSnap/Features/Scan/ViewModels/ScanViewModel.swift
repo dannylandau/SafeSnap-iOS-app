@@ -10,13 +10,11 @@ import PhotosUI
 import SwiftUI
 
 final class ScanViewModel: ObservableObject {
-    
     @Published var resultVM: RecognitionResultViewModel? = nil
-//    @Published var scanStep: ScanStepPhase = .preparing
-    
     @Published var phase: ScanPhase = .idle
-
     @Published var scanError: ScanError? = nil
+    
+    @MainActor let alerts = AlertCenter()
 
     private var lastImageData: Data?
     private var lastUIImage: UIImage?
@@ -32,7 +30,6 @@ final class ScanViewModel: ObservableObject {
 
     func handleImage(_ image: UIImage) {
         Task { @MainActor in
-//            self.scanStep = .preparing
             self.resultVM = nil
             self.phase = .analyzing(image: image)
         }
@@ -58,11 +55,19 @@ final class ScanViewModel: ObservableObject {
                 await MainActor.run {
                     self.phase = .error
                     self.scanError = error
+                    print(error.localizedDescription)
+                    alerts.show(AppAlert.from(error: error, retry: {
+                        [weak self] in self?.retryLastScan()
+                    }))
                 }
             } catch {
                 await MainActor.run {
                     self.phase = .error
                     self.scanError = .openAIFailed(reason: error.localizedDescription)
+                    print(error.localizedDescription)
+                    alerts.show(AppAlert.from(error: error, retry: {
+                        [weak self] in self?.retryLastScan()
+                    }))
                 }
             }
         }

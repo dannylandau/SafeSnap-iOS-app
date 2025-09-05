@@ -30,10 +30,8 @@ public final class SafetyAnalyzer {
     }
 
     public struct Options {
-        public let includePetSafety: Bool
         public let petPreference: PetPreference
-        public init(includePetSafety: Bool, petPreference: PetPreference = .none) {
-            self.includePetSafety = includePetSafety
+        public init(petPreference: PetPreference = .none) {
             self.petPreference = petPreference
         }
     }
@@ -48,7 +46,7 @@ public final class SafetyAnalyzer {
         // 2) First pass with FAST model (with a single retry)
         let fastResult = try await Self.withRetry(times: 1) {
             try await self.openAI.analyzeSafety(
-                input: .init(guess: guess, includePetSafety: options.includePetSafety, petPreference: options.petPreference),
+                input: .init(guess: guess, petPreference: options.petPreference),
                 tier: .fast,
                 timeout: self.FAST_TIMEOUT
             )
@@ -61,7 +59,7 @@ public final class SafetyAnalyzer {
 
         if shouldEscalate {
             let (betterResp, betterConf) = try await openAI.analyzeSafety(
-                input: .init(guess: guess, includePetSafety: options.includePetSafety, petPreference: options.petPreference),
+                input: .init(guess: guess, petPreference: options.petPreference),
                 tier: .smart,
                 timeout: SMART_TIMEOUT
             )

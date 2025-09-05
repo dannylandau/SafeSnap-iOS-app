@@ -26,7 +26,6 @@ public struct ScanHistoryItem: Codable, Identifiable, Equatable {
     public let categoryName: String
     public let brand: String?
     public let confidence: Double
-    public let signalsSummary: SignalsSummary
     public let visionContextRef: URL? // optional externalized sanitized JSON
 
     // OpenAI snapshot (structured)
@@ -49,7 +48,6 @@ public struct ScanHistoryItem: Codable, Identifiable, Equatable {
         categoryName: String,
         brand: String?,
         confidence: Double,
-        signalsSummary: SignalsSummary,
         visionContextRef: URL?,
         analysis: SafetyAnalysisResponse,
         model: String,
@@ -67,7 +65,6 @@ public struct ScanHistoryItem: Codable, Identifiable, Equatable {
         self.categoryName = categoryName
         self.brand = brand
         self.confidence = confidence
-        self.signalsSummary = signalsSummary
         self.visionContextRef = visionContextRef
         self.analysis = analysis
         self.model = model
@@ -83,21 +80,6 @@ public struct ScanHistoryItem: Codable, Identifiable, Equatable {
             self.includeDogs = includeDogs
             self.includeCats = includeCats
             self.includeChildren = includeChildren
-        }
-    }
-
-    public struct SignalsSummary: Codable, Equatable {
-        public let labels: [String]      // top 5
-        public let objects: [String]     // top 3
-        public let webEntities: [String] // top 5
-        public let bestGuess: String?
-        public let detectedTextExcerpt: String?
-        public init(labels: [String], objects: [String], webEntities: [String], bestGuess: String?, detectedTextExcerpt: String?) {
-            self.labels = labels
-            self.objects = objects
-            self.webEntities = webEntities
-            self.bestGuess = bestGuess
-            self.detectedTextExcerpt = detectedTextExcerpt
         }
     }
 }
