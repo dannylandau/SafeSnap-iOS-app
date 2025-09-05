@@ -77,16 +77,7 @@ struct ScanView: View {
         }) { vm in
             ResultView(vm: vm)
         }
-        .alert(item: $viewModel.scanError) { error in
-            Alert(
-                title: Text("Scan Failed"),
-                message: Text(error.localizedDescription),
-                primaryButton: .default(Text("Retry")) {
-                    viewModel.retryLastScan()
-                },
-                secondaryButton: .cancel()
-            )
-        }
+        .alerts(using: viewModel.alerts)
     }
     
     // Computed property to check if the current phase is analyzing

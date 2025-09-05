@@ -11,7 +11,6 @@ public enum ModelTier { case fast, smart }
 
 public struct SafetyAnalysisInput: Codable, Equatable {
     public let guess: ProductGuess
-    public let includePetSafety: Bool
     public let petPreference: PetPreference
 }
 

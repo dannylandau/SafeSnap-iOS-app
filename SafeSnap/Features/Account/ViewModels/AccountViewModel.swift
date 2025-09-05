@@ -9,7 +9,7 @@ final class AccountViewModel: ObservableObject {
     @Published var isSignedIn: Bool = false
 
     // MARK: - Constants
-    let appVersion = "v2.1.1"
+    let appVersion = "v1.0"
     let demoMode = true
 
     // MARK: - Dependencies

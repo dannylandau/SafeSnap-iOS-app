@@ -34,11 +34,18 @@ final class OpenAIService: OpenAIServiceType {
         return [
             "type": "object",
             "required": [
-                "productName","productType",
+                "productName",
+                "productType",
                 "overallSafetyScore",
-                "childSafetyScore","animalSafetyScore","dogSafetyScore","catSafetyScore",
-                "modelConfidence","recognitionConfidence",
-                "generalSafety","petSafety","hygieneWarnings","recalls"
+                "childSafetyScore",
+                "dogSafetyScore",
+                "catSafetyScore",
+                "modelConfidence",
+                "recognitionConfidence",
+                "generalSafety",
+                "petSafety",
+                "hygieneWarnings",
+                "recalls"
             ],
             "properties": [
                 "productName": ["type": "string"],
@@ -47,7 +54,6 @@ final class OpenAIService: OpenAIServiceType {
                 // Scoring fields
                 "overallSafetyScore": ["type": "integer", "minimum": 0, "maximum": 100],
                 "childSafetyScore":  ["type": "integer", "minimum": 0, "maximum": 100],
-                "animalSafetyScore": ["type": "integer", "minimum": 0, "maximum": 100],
                 "dogSafetyScore":    ["type": ["integer","null"], "minimum": 0, "maximum": 100],
                 "catSafetyScore":    ["type": ["integer","null"], "minimum": 0, "maximum": 100],
 
@@ -296,7 +302,7 @@ final class OpenAIService: OpenAIServiceType {
 
         let user = """
         Analyze this product's safety.
-        OPTIONS: { \(petFlags), includeChildren: \(input.includePetSafety ? "true" : "false") }
+        OPTIONS: { \(petFlags) }
 
         Product guess (from Vision):
         - name: \(guess.name)
@@ -350,17 +356,16 @@ final class OpenAIService: OpenAIServiceType {
         }
         func tryDecode(_ content: String, includeDogs: Bool, includeCats: Bool) -> SafetyAnalysisResponse? {
             let cleaned = cleanedJSON(content)
+            print("🪄 OpenAI Raw JSON Response:", cleaned)
             guard let data = cleaned.data(using: .utf8) else { return nil }
             if var parsed = try? JSONDecoder().decode(SafetyAnalysisResponse.self, from: data) {
                 // Normalize ranges, backfill, and cap using validator (parity with generateSafetyAnalysis)
                 parsed.childSafetyScore = max(0, min(100, parsed.childSafetyScore))
                 parsed.dogSafetyScore = parsed.dogSafetyScore.map { max(0, min(100, $0)) }
                 parsed.catSafetyScore = parsed.catSafetyScore.map { max(0, min(100, $0)) }
-                parsed.animalSafetyScore = max(0, min(100, parsed.animalSafetyScore))
                 parsed.overallSafetyScore = max(0, min(100, parsed.overallSafetyScore))
                 parsed.modelConfidence = max(0.0, min(1.0, parsed.modelConfidence))
                 parsed.recognitionConfidence = max(0.0, min(1.0, parsed.recognitionConfidence))
-                parsed.backfillAnimalScoresIfNeeded()
                 let validated10 = validateSafetyScoreConsistency(
                     primaryScore: parsed.overallSafetyScore / 10,
                     productName: parsed.productName.lowercased(),
@@ -377,8 +382,8 @@ final class OpenAIService: OpenAIServiceType {
         }
 
         // Flags for validator
-        let includeDogs = input.includePetSafety && (input.petPreference == .dog || input.petPreference == .both)
-        let includeCats = input.includePetSafety && (input.petPreference == .cat || input.petPreference == .both)
+        let includeDogs = input.petPreference == .dog || input.petPreference == .both
+        let includeCats = input.petPreference == .cat || input.petPreference == .both
 
         // Attempt primary format
         let (contentPrimary, _, _) = try await runOnce(responseFormat: primaryFormat)
@@ -410,7 +415,7 @@ final class OpenAIService: OpenAIServiceType {
 // MARK: - Prompt Builder & Context Summary
     private func buildAnalysisPrompt(req: SafetyAnalysisRequest, context: Data?, imageHint: String? = nil) -> String {
         let evidence = imageHint ?? summarizeContext(context)
-        var schema = """
+        let schema = """
         OUTPUT REQUIREMENT:
         Return JSON ONLY with this exact schema (keys and value types). Do NOT include any identification fields in the output; use them only to ground the analysis.
         {
@@ -418,7 +423,6 @@ final class OpenAIService: OpenAIServiceType {
           "productType": String,
           "overallSafetyScore": Int,            // 0–100
           "childSafetyScore": Int,              // 0–100
-          "animalSafetyScore": Int,             // 0–100 (min(dog,cat))
           "dogSafetyScore": Int|null,           // 0–100
           "catSafetyScore": Int|null,           // 0–100
           "modelConfidence": Double,            // 0.0–1.0
@@ -567,7 +571,6 @@ final class OpenAIService: OpenAIServiceType {
         }
         let dog100: Int = petSafety.dogs.isEmpty ? 90 : petScore(from: petSafety.dogs)
         let cat100: Int = petSafety.cats.isEmpty ? 90 : petScore(from: petSafety.cats)
-        let animal100 = min(dog100, cat100)
 
         // Choose a conservative overall (child-focused here). SafetyAnalyzer will remap for pets.
         let overall = child100
@@ -577,7 +580,6 @@ final class OpenAIService: OpenAIServiceType {
             productType: type,
             overallSafetyScore: overall,
             childSafetyScore: child100,
-            animalSafetyScore: animal100,
             dogSafetyScore: dog100,
             catSafetyScore: cat100,
             modelConfidence: 0.6,
