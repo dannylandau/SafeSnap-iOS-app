@@ -19,4 +19,8 @@ public struct ProductGuess: Codable, Equatable {
     public let type: String
     public let confidence: Double // 0.0–1.0
     public let brand: String?
+    
+    var description: String {
+        "\(name) \(type) confidence:\(confidence)"
+    }
 }

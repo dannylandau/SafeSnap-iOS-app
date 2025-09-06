@@ -8,6 +8,71 @@
 import Foundation
 import UIKit
 
+// MARK: - Service Error
+
+enum OpenAIServiceError: LocalizedError {
+    case invalidAPIKey
+    case timeout(stage: ModelTier, seconds: Int)
+    case cancelled(stage: ModelTier)
+    case http(status: Int, requestID: String?, bodyPreview: String)
+    case network(URLError)
+    case emptyContent(stage: ModelTier)
+    case finishReasonBlocked(stage: ModelTier, reason: String) // e.g., "content_filter"
+    case decodeJSON(stage: ModelTier, reason: String, jsonPreview: String)
+    case other(stage: ModelTier, underlying: Error)
+
+    var errorDescription: String? {
+        switch self {
+        case .invalidAPIKey: return "Missing or invalid API key"
+        case .timeout(_, let s): return "Timeout reached (\(s)s)"
+        case .cancelled: return "Operation cancelled"
+        case .http: return "OpenAI API error"
+        case .network: return "Network problem"
+        case .emptyContent: return "Got an empty response"
+        case .finishReasonBlocked(_, let r): return "Response was blocked (\(r))"
+        case .decodeJSON: return "Couldn’t read the response"
+        case .other: return "Something went wrong"
+        }
+    }
+
+    var failureReason: String? {
+        switch self {
+        case .invalidAPIKey: return "API key is missing or malformed."
+        case .timeout(let stage, _): return "\(stage) request exceeded the time limit."
+        case .cancelled(let stage): return "\(stage) request was cancelled."
+        case .http(let status, let rid, _):
+            return "HTTP \(status)\(rid.map { ", request-id=\($0)" } ?? "")"
+        case .network(let e):
+            return "URLSession error: \(e.code.rawValue)"
+        case .emptyContent(let stage):
+            return "\(stage) returned no content."
+        case .finishReasonBlocked(_, let r):
+            return "finish_reason='\(r)'"
+        case .decodeJSON(_, let why, _):
+            return why
+        case .other(_, let err):
+            let ns = err as NSError; return "\(ns.domain)(\(ns.code))"
+        }
+    }
+
+    var recoverySuggestion: String? {
+        switch self {
+        case .invalidAPIKey: return "Set a valid OpenAI API key in Info.plist or app settings."
+        case .timeout: return "Check your connection and try again."
+        case .cancelled: return "Tap Retry to run the analysis again."
+        case .http(let status, _, _):
+            if status == 429 { return "You’re sending requests too quickly. Wait a moment and retry." }
+            if (500...599).contains(status) { return "Service had an issue. Try again shortly." }
+            return "Please try again."
+        case .network: return "Check internet connectivity and retry."
+        case .emptyContent: return "Retry, or try the 'Verify' (SMART) pass."
+        case .finishReasonBlocked: return "Adjust prompt or retry; content was filtered."
+        case .decodeJSON: return "Retry; if it persists, check the schema/prompt."
+        case .other: return "Please try again."
+        }
+    }
+}
+
 public protocol OpenAIServiceType {
     /// Returns response + self-reported model confidence (0–1).
     func analyzeSafety(input: SafetyAnalysisInput, tier: ModelTier, timeout: Duration) async throws -> (SafetyAnalysisResponse, modelConfidence: Double)
@@ -33,6 +98,7 @@ final class OpenAIService: OpenAIServiceType {
     private func safetyJSONSchema() -> [String: Any] {
         return [
             "type": "object",
+            "additionalProperties": false,
             "required": [
                 "productName",
                 "productType",
@@ -217,44 +283,76 @@ final class OpenAIService: OpenAIServiceType {
     
     // MARK: - New Safety Analysis API (parity with web)
     // Shared sender for chat requests (text/image)
-    private func sendChat(body: [String: Any], apiKey: String, endpoint: String) async throws -> (content: String, data: Data, finishReason: String?) {
+    private func sendChat(
+        body: [String: Any],
+        apiKey: String,
+        endpoint: String,
+        stage: ModelTier,                 // NEW: to label errors
+        requestTimeout: TimeInterval      // NEW: pass from caller
+    ) async throws -> (content: String, data: Data, finishReason: String?, requestID: String?, elapsedMs: Int) {
+        guard isKeyValid(apiKey) else { throw OpenAIServiceError.invalidAPIKey }
+
         let t0 = Date()
         var request = URLRequest(url: URL(string: endpoint)!)
-        request.timeoutInterval = 60
+        request.timeoutInterval = requestTimeout
         request.httpMethod = "POST"
         request.setValue("Bearer \(apiKey)", forHTTPHeaderField: "Authorization")
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.httpBody = try JSONSerialization.data(withJSONObject: body)
 
-        let (data, response) = try await URLSession.shared.data(for: request)
-        if let http = response as? HTTPURLResponse, !(200...299).contains(http.statusCode) {
+        do {
+            let (data, response) = try await URLSession.shared.data(for: request)
+            let ms = Int(Date().timeIntervalSince(t0) * 1000)
+            let http = response as? HTTPURLResponse
+            let reqID = http?.allHeaderFields["x-request-id"] as? String
+            if let http, !(200...299).contains(http.statusCode) {
+                let preview = String(data: data, encoding: .utf8)?.prefix(600) ?? Substring("<none>")
+                #if DEBUG
+                print("❌ OPENAI HTTP \(http.statusCode), rid=\(reqID ?? "-"), bodyPreview=\(preview)")
+                #endif
+                throw OpenAIServiceError.http(status: http.statusCode, requestID: reqID, bodyPreview: String(preview))
+            }
+
+            // Decode content as String or content parts
+            let raw = try JSONDecoder().decode(OpenAIChatResponse.self, from: data)
+            let content = raw.choices.first?.message.content.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+
+            // Read finish_reason from raw JSON
+            var finish: String? = nil
+            if let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+               let choices = obj["choices"] as? [[String: Any]],
+               let first = choices.first {
+                finish = first["finish_reason"] as? String
+            }
+
             #if DEBUG
-            print("❌ OPENAI API: HTTP Error:", http.statusCode)
-            print("Body:", String(data: data, encoding: .utf8) ?? "<none>")
+            print("⏱️ OpenAI sendChat elapsed=\(ms)ms, rid=\(reqID ?? "-"), finish_reason=\(finish ?? "nil"), content_len=\(content.count)")
             #endif
-            throw NSError(domain: "OpenAIService", code: http.statusCode, userInfo: [NSLocalizedDescriptionKey: "OpenAI API error: \(http.statusCode)"])
+            return (content, data, finish, reqID, ms)
+
+        } catch is CancellationError {
+            throw OpenAIServiceError.cancelled(stage: stage)
+        } catch let e as URLError where e.code == .timedOut {
+            throw OpenAIServiceError.timeout(stage: stage, seconds: Int(requestTimeout))
+        } catch let e as URLError {
+            throw OpenAIServiceError.network(e)
+        } catch {
+            throw OpenAIServiceError.other(stage: stage, underlying: error)
         }
-
-        // Decode content as String or content parts
-        let raw = try JSONDecoder().decode(OpenAIChatResponse.self, from: data)
-        let content = raw.choices.first?.message.content.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-
-        // Try to read finish_reason from the raw JSON for retry logic
-        var finish: String? = nil
-        if let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
-           let choices = obj["choices"] as? [[String: Any]],
-           let first = choices.first {
-            finish = first["finish_reason"] as? String
-        }
-
-#if DEBUG
-        let ms = Int(Date().timeIntervalSince(t0) * 1000)
-        print("⏱️ OpenAI sendChat elapsed: \(ms) ms, finish_reason=\(finish ?? "nil"), content_len=\(content.count)")
-#endif
-        return (content, data, finish)
     }
 
 // MARK: - analyzeSafety implementation (OpenAIServiceType)
+    
+    private func shouldTryFallback(_ error: Error) -> Bool {
+        // Fallback is only meaningful for content/schema issues (not transport)
+        guard let e = error as? OpenAIServiceError else { return true } // unknown → try fallback
+        switch e {
+        case .finishReasonBlocked, .decodeJSON, .emptyContent:
+            return true
+        default:
+            return false
+        }
+    }
 
     public func analyzeSafety(
         input: SafetyAnalysisInput,
@@ -267,11 +365,11 @@ final class OpenAIService: OpenAIServiceType {
             case .fast:
                 return (
                     "gpt-4.1-mini", 0.2, 900,
-                    ["type": "json_object"],
                     [
                         "type": "json_schema",
                         "json_schema": ["name": "SafetyAnalysisResponse", "schema": safetyJSONSchema()]
-                    ]
+                    ],
+                    ["type": "json_object"]
                 )
             case .smart:
                 return (
@@ -287,7 +385,19 @@ final class OpenAIService: OpenAIServiceType {
 
         // Shared prompts
         let systemText = """
-        You are a product safety analyst. Return JSON ONLY per the schema (0–100 integer scores for childSafetyScore, dogSafetyScore, catSafetyScore; animalSafetyScore = min(dog,cat); modelConfidence in 0–1; recognitionConfidence may be 0.0). No markdown, no code fences, no commentary.
+        You are a product safety analyst.
+
+        OUTPUT RULES (MANDATORY):
+        - Return JSON ONLY that VALIDATES against the provided schema. No prose, no markdown.
+        - Do NOT add keys not present in the schema; leave optional fields null or empty arrays instead of inventing values.
+        - Score ranges: overall/child/dog/cat = 0–100 integers; modelConfidence & recognitionConfidence = 0.0–1.0 numbers.
+        - DO NOT perform any image recognition or OCR. Rely ONLY on the Google Vision data and fields provided by the app (productName, productType, brand candidates, labels/objects, detected text, recognition confidence).
+        - If you are uncertain about any field, choose the safest default:
+          • productName/productType may be "Unknown" if not inferable from the provided Vision data
+          • recalls: [] unless there is strong evidence
+          • hygieneWarnings: [] unless clearly warranted
+        - When pet analysis is disabled, still return the pet sections and scores, but set dogSafetyScore/catSafetyScore to null and empty arrays in petSafety.
+        - Keep answers concise; avoid repeating evidence in text—encode it in the JSON fields only.
         """
 
         let guess = input.guess
@@ -301,22 +411,24 @@ final class OpenAIService: OpenAIServiceType {
         }()
 
         let user = """
-        Analyze this product's safety.
-        OPTIONS: { \(petFlags) }
+        Analyze this product's safety using the schema.
 
-        Product guess (from Vision):
+        IMPORTANT:
+        - Do NOT attempt to recognize the image.
+        - Use ONLY the following Google Vision-derived fields as ground truth for identification.
+
+        Product (from Google Vision):
         - name: \(guess.name)
         - type: \(guess.type)
         - brand: \(guess.brand ?? "unknown")
         - vision_confidence: \(String(format: "%.2f", guess.confidence))
 
-        OUTPUT:
-        Return STRICT JSON matching the app schema. Provide 0–100 integer scores for childSafetyScore, dogSafetyScore, catSafetyScore; set animalSafetyScore = min(dog, cat). Fill modelConfidence 0.0–1.0. recognitionConfidence may be 0.0 (the app may overwrite from Vision).
+        OPTIONS: { \(petFlags) }
         """
 
         // Helper to run a single request with a given response_format
-        func runOnce(responseFormat: [String: Any]) async throws -> (String, Data, String?) {
-            var body: [String: Any] = [
+        func runOnce(responseFormat: [String: Any]) async throws -> (content: String, data: Data, finish: String?, requestID: String?) {
+            let body: [String: Any] = [
                 "model": model,
                 "messages": [
                     ["role": "system", "content": [["type": "text", "text": systemText]]],
@@ -330,22 +442,31 @@ final class OpenAIService: OpenAIServiceType {
             debugPrintChatBody(label: tier == .fast ? "FAST SAFETY" : "SMART SAFETY", body: body)
             #endif
 
-            // Race network vs timeout
-            func send() async throws -> (String, Data, String?) {
-                try await sendChat(body: body, apiKey: apiKey, endpoint: endpoint)
+            // Respect the caller's timeout (Duration) without double-wrapping;
+            // URLRequest.timeoutInterval is set inside sendChat.
+            let seconds = max(1, Int(timeout.components.seconds))
+            let (content, data, finish, requestID, _) = try await sendChat(
+                body: body,
+                apiKey: apiKey,
+                endpoint: endpoint,
+                stage: tier,
+                requestTimeout: TimeInterval(seconds)
+            )
+            
+            if content.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                throw OpenAIServiceError.emptyContent(stage: tier)
             }
-            let ns = UInt64(timeout.components.seconds) * 1_000_000_000
-            let (content, data, finish): (String, Data, String?) = try await withThrowingTaskGroup(of: (String, Data, String?).self) { group in
-                group.addTask { try await send() }
-                group.addTask {
-                    try await Task.sleep(nanoseconds: ns)
-                    throw NSError(domain: "OpenAIService", code: -1001, userInfo: [NSLocalizedDescriptionKey: "timeout"])
+
+            // OpenAI might return finish_reason that signals filtering/truncation
+            if let finish, finish != "stop" {
+                if finish == "length" {
+                    // Not fatal by itself; we’ll try decoding anyway
+                } else if finish.contains("content_filter") {
+                    throw OpenAIServiceError.finishReasonBlocked(stage: tier, reason: finish)
                 }
-                let result = try await group.next()!
-                group.cancelAll()
-                return result
             }
-            return (content, data, finish)
+
+            return (content, data, finish, requestID)
         }
 
         // Cleaners & decoder
@@ -354,18 +475,26 @@ final class OpenAIService: OpenAIServiceType {
              .replacingOccurrences(of: "```json", with: "")
              .replacingOccurrences(of: "```", with: "")
         }
-        func tryDecode(_ content: String, includeDogs: Bool, includeCats: Bool) -> SafetyAnalysisResponse? {
+
+        func decodeOrThrow(_ content: String, requestID: String?, finish: String?, includeDogs: Bool, includeCats: Bool) throws -> SafetyAnalysisResponse {
             let cleaned = cleanedJSON(content)
+            #if DEBUG
             print("🪄 OpenAI Raw JSON Response:", cleaned)
-            guard let data = cleaned.data(using: .utf8) else { return nil }
-            if var parsed = try? JSONDecoder().decode(SafetyAnalysisResponse.self, from: data) {
-                // Normalize ranges, backfill, and cap using validator (parity with generateSafetyAnalysis)
+            #endif
+            guard let data = cleaned.data(using: .utf8) else {
+                throw OpenAIServiceError.decodeJSON(stage: tier, reason: "UTF-8 conversion failed", jsonPreview: String(cleaned.prefix(240)))
+            }
+            do {
+                var parsed = try JSONDecoder().decode(SafetyAnalysisResponse.self, from: data)
+
+                // Normalize & validate ranges
                 parsed.childSafetyScore = max(0, min(100, parsed.childSafetyScore))
                 parsed.dogSafetyScore = parsed.dogSafetyScore.map { max(0, min(100, $0)) }
                 parsed.catSafetyScore = parsed.catSafetyScore.map { max(0, min(100, $0)) }
                 parsed.overallSafetyScore = max(0, min(100, parsed.overallSafetyScore))
                 parsed.modelConfidence = max(0.0, min(1.0, parsed.modelConfidence))
                 parsed.recognitionConfidence = max(0.0, min(1.0, parsed.recognitionConfidence))
+
                 let validated10 = validateSafetyScoreConsistency(
                     primaryScore: parsed.overallSafetyScore / 10,
                     productName: parsed.productName.lowercased(),
@@ -377,8 +506,19 @@ final class OpenAIService: OpenAIServiceType {
                 )
                 parsed.overallSafetyScore = min(parsed.overallSafetyScore, validated10 * 10)
                 return parsed
+            } catch let e as DecodingError {
+                let why: String
+                switch e {
+                case .keyNotFound(let k, _):       why = "Missing key: \(k.stringValue)"
+                case .typeMismatch(let t, _):      why = "Type mismatch: \(t)"
+                case .valueNotFound(let t, _):     why = "Value not found for: \(t)"
+                case .dataCorrupted(let ctx):      why = "Data corrupted: \(ctx.debugDescription)"
+                @unknown default:                  why = "Unknown decoding error"
+                }
+                throw OpenAIServiceError.decodeJSON(stage: tier, reason: why + (finish != nil ? " (finish_reason=\(finish!))" : ""), jsonPreview: String(cleaned.prefix(480)))
+            } catch {
+                throw OpenAIServiceError.other(stage: tier, underlying: error)
             }
-            return nil
         }
 
         // Flags for validator
@@ -386,23 +526,79 @@ final class OpenAIService: OpenAIServiceType {
         let includeCats = input.petPreference == .cat || input.petPreference == .both
 
         // Attempt primary format
-        let (contentPrimary, _, _) = try await runOnce(responseFormat: primaryFormat)
-        if let parsed = tryDecode(contentPrimary, includeDogs: includeDogs, includeCats: includeCats) {
-            let mc = max(0.0, min(1.0, parsed.modelConfidence > 0 ? parsed.modelConfidence : 0.5))
-            return (parsed, mc)
-        }
+        let contentPrimary: String
+        let finishPrimary: String?
+        let ridPrimary: String?
 
-        // Optional retry with schema (FAST tier only)
-        if let fallback = fallbackFormat {
-            let (contentFallback, _, _) = try await runOnce(responseFormat: fallback)
-            if let parsed = tryDecode(contentFallback, includeDogs: includeDogs, includeCats: includeCats) {
+        do {
+            let r = try await runOnce(responseFormat: primaryFormat)
+            contentPrimary = r.content
+            finishPrimary  = r.finish
+            ridPrimary     = r.requestID
+        } catch {
+            #if DEBUG
+            print("⚠️ Primary request failed (\(tier)): \(error)")
+            #endif
+
+            // Only try fallback for FAST and only for non-transport errors.
+            if tier == .fast, shouldTryFallback(error), let fallback = fallbackFormat {
+                let r = try await runOnce(responseFormat: fallback)
+                let parsed = try decodeOrThrow(
+                    r.content,
+                    requestID: r.requestID,
+                    finish: r.finish,
+                    includeDogs: includeDogs,
+                    includeCats: includeCats
+                )
                 let mc = max(0.0, min(1.0, parsed.modelConfidence > 0 ? parsed.modelConfidence : 0.5))
                 return (parsed, mc)
+            }
+
+            // Transport/HTTP/etc. → propagate
+            throw error
+        }
+
+        // Decode primary
+        do {
+            let parsed = try decodeOrThrow(
+                contentPrimary,
+                requestID: ridPrimary,
+                finish: finishPrimary,
+                includeDogs: includeDogs,
+                includeCats: includeCats
+            )
+            let mc = max(0.0, min(1.0, parsed.modelConfidence > 0 ? parsed.modelConfidence : 0.5))
+            return (parsed, mc)
+        } catch {
+            #if DEBUG
+            print("⚠️ Primary decode failed (\(tier)): \(error)")
+            #endif
+        }
+
+        // Try fallback decode for FAST (schema rescue). For SMART we degrade later.
+        if let fallback = fallbackFormat {
+            let r = try await runOnce(responseFormat: fallback)
+            do {
+                let parsed = try decodeOrThrow(
+                    r.content,
+                    requestID: r.requestID,
+                    finish: r.finish,
+                    includeDogs: includeDogs,
+                    includeCats: includeCats
+                )
+                let mc = max(0.0, min(1.0, parsed.modelConfidence > 0 ? parsed.modelConfidence : 0.5))
+                return (parsed, mc)
+            } catch {
+                #if DEBUG
+                print("⚠️ Fallback decode failed (\(tier)): \(error)")
+                #endif
+                if tier == .fast { throw error }
+                // for .smart we degrade to mock below
             }
         }
 
         #if DEBUG
-        print("⚠️ analyzeSafety(\(tier)) failed to decode with both formats; returning mock.")
+        print("⚠️ analyzeSafety(\(tier)) failed to decode; serving mock for UX continuity.")
         #endif
         let mock = generateEnhancedMockAnalysis(SafetyAnalysisRequest(
             includeDogs: includeDogs,
@@ -410,109 +606,6 @@ final class OpenAIService: OpenAIServiceType {
             includeChildren: true
         ))
         return (mock, 0.5)
-    }
-
-// MARK: - Prompt Builder & Context Summary
-    private func buildAnalysisPrompt(req: SafetyAnalysisRequest, context: Data?, imageHint: String? = nil) -> String {
-        let evidence = imageHint ?? summarizeContext(context)
-        let schema = """
-        OUTPUT REQUIREMENT:
-        Return JSON ONLY with this exact schema (keys and value types). Do NOT include any identification fields in the output; use them only to ground the analysis.
-        {
-          "productName": String,
-          "productType": String,
-          "overallSafetyScore": Int,            // 0–100
-          "childSafetyScore": Int,              // 0–100
-          "dogSafetyScore": Int|null,           // 0–100
-          "catSafetyScore": Int|null,           // 0–100
-          "modelConfidence": Double,            // 0.0–1.0
-          "recognitionConfidence": Double,      // 0.0–1.0 (you may set 0.0; app will overwrite from Vision)
-          "generalSafety": {
-            "pros": [{"label": String, "severity": "low"|"medium"|"high", "category": String}],
-            "cons": [{"label": String, "severity": "low"|"medium"|"high", "category": String}]
-          },
-          "petSafety": {
-            "dogs": [{"severity": "low"|"medium"|"high", "warning": String, "reason": String}],
-            "cats": [{"severity": "low"|"medium"|"high", "warning": String, "reason": String}]
-          },
-          "hygieneWarnings": [{"type": String, "message": String}],
-          "recalls": [{"date": String, "reason": String, "severity": "low"|"medium"|"high", "source": String}]
-        }
-        """
-
-        let petSection: String = {
-            var lines: [String] = []
-            if req.includeDogs { lines.append("- Analyze safety for dogs (toxicity, choking hazards, behavioral risks)") }
-            if req.includeCats { lines.append("- Analyze safety for cats (toxicity, choking hazards, behavioral risks)") }
-            return lines.isEmpty ? "" : ("\nPET SAFETY ANALYSIS:\n" + lines.joined(separator: "\n"))
-        }()
-
-        let base = """
-        Analyze the safety of this product.
-        
-        OPTIONS: { "includeDogs": \(req.includeDogs), "includeCats": \(req.includeCats), "includeChildren": \(req.includeChildren) }
-        Return JSON only—no markdown, no code fences, no prose.
-
-        STEP 1 — IDENTIFY FROM IMAGE (internal reasoning only, do not output this section):
-        - Determine productType (one of: "food", "toy", "cosmetic", "electronic", "household", "clothing", "jewelry", "pharmaceutical", "automotive", "other").
-        - Determine canonical productName the user would recognize.
-        - List up to 3 brandCandidates visible or likely from the image/text/packaging.
-        - List up to 5 high-level labels (what you see, e.g., "bottle", "snack", "logo").
-        - List up to 5 localized objects (e.g., "power cord", "blade").
-        - Extract any prominent detectedText from packaging (OCR).
-        - Estimate a recognition confidence between 0.0 and 1.0.
-        Use this identification to ground the safety analysis in STEP 2. Do NOT include these identification fields in the output JSON; they are for your reasoning only.
-
-        STEP 2 — SAFETY ANALYSIS (this must be reflected in the JSON output):
-
-        Provide a comprehensive safety analysis including (grounded in STEP 1 identification):
-        OVERALL SAFETY SCORE (0-10) with rationale.
-        GENERAL SAFETY: 2-4 pros and 2-4 cons with severity and category.
-        HYGIENE WARNINGS and RECALLS if relevant.
-        \(petSection)
-
-        Use evidence (if provided) to stay specific:
-        \(evidence)
-
-        \(schema)
-        """
-        return base
-    }
-
-    private func summarizeContext(_ context: Data?) -> String {
-    // If present: update generateSafetyAnalysis(_ req: SafetyAnalysisRequest, context: Data?) response_format
-        guard let context else { return "(no extra evidence)" }
-        guard let json = try? JSONSerialization.jsonObject(with: context) as? [String: Any] else { return "(evidence unavailable)" }
-
-        var lines: [String] = []
-        if let summary = json["summary"] as? [String: Any] {
-            if let pn = summary["productName"] as? String { lines.append("- classifier.productName: \(pn)") }
-            if let pt = summary["productType"] as? String { lines.append("- classifier.productType: \(pt)") }
-            if let conf = summary["confidence"] as? Double { lines.append(String(format: "- classifier.confidence: %.2f", conf)) }
-        }
-        if let signals = json["signals"] as? [String: Any] {
-            if let best = signals["bestGuess"] as? String, !best.isEmpty { lines.append("- bestGuess: \(best)") }
-            if let labels = signals["labels"] as? [[String: Any]] {
-                let top = labels.prefix(5).compactMap { $0["description"] as? String }
-                if !top.isEmpty { lines.append("- topLabels: \(top.joined(separator: ", "))") }
-            }
-            if let objs = signals["objects"] as? [[String: Any]] {
-                let top = objs.prefix(3).compactMap { $0["name"] as? String }
-                if !top.isEmpty { lines.append("- objects: \(top.joined(separator: ", "))") }
-            }
-            if let ents = signals["webEntities"] as? [[String: Any]] {
-                let top = ents.prefix(5).compactMap { $0["description"] as? String }
-                if !top.isEmpty { lines.append("- webEntities: \(top.joined(separator: ", "))") }
-            }
-            if let text = signals["detectedText"] as? String, !text.isEmpty {
-                let t = text.count > 200 ? String(text.prefix(200)) + "…" : text
-                lines.append("- detectedText: \(t)")
-            }
-            if let brands = signals["brandCandidates"] as? [String], !brands.isEmpty {
-                lines.append("- brands: \(brands.prefix(2).joined(separator: ", "))")
-            }
-        }
-        return lines.isEmpty ? "(no extra evidence)" : lines.joined(separator: "\n")
     }
 
     private func isKeyValid(_ key: String) -> Bool {

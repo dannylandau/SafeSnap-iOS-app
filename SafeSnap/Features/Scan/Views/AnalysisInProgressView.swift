@@ -2,177 +2,233 @@ import SwiftUI
 import Combine
 
 struct AnalysisInProgressView: View {
+    @Environment(\.dismiss) private var dismiss
     let image: UIImage?
-    @ObservedObject var coordinator: ScanAnalysisCoordinator
+    @ObservedObject var viewModel: ScanViewModel
+
+    // force read from the wrapped value, not the projected binding
+    private var coordinator: ScanAnalysisCoordinator {
+        _viewModel.wrappedValue.coordinator
+    }
     let errorMessage: String?
 
-    init(image: UIImage?, coordinator: ScanAnalysisCoordinator, errorMessage: String? = nil) {
+    init(image: UIImage?, viewModel: ScanViewModel, errorMessage: String? = nil) {
         self.image = image
-        self.coordinator = coordinator
+        self.viewModel = viewModel
         self.errorMessage = errorMessage
     }
     
-    var body: some View {
-        VStack(spacing: 32) {
-            Spacer(minLength: 40)
+    // MARK: - Step presentation
+    private enum Step: CaseIterable { case vision, fast, smart }
 
-            if let image = image {
-                Image(uiImage: image)
-                    .resizable()
-                    .aspectRatio(contentMode: .fit)
-                    .frame(width: 280, height: 280)
-                    .background(
-                        RoundedRectangle(cornerRadius: 56, style: .continuous)
-                            .fill(Color.white.opacity(0.05))
-                            .background(.ultraThinMaterial)
-                            .blur(radius: 8)
-                    )
-                    .clipShape(RoundedRectangle(cornerRadius: 56, style: .continuous))
-                    .shadow(color: .black.opacity(0.08), radius: 24, x: 0, y: 10)
-                    .padding(.bottom, 28)
-            }
-
-            SpinnerView()
-                .frame(height: 24)
-                .padding(.bottom, 28)
-
-            VStack(spacing: 10) {
-                Text("AI Analysis")
-                    .font(.system(.title2, design: .rounded).weight(.semibold))
-
-                Text("Analyzing image for safety insights…")
-                    .foregroundStyle(.green)
-                    .font(.system(.body, design: .rounded))
-                    .multilineTextAlignment(.center)
-
-                Text("We're checking across multiple global safety standards to give you trustworthy results in just a few seconds.")
-                    .foregroundColor(.secondary)
-                    .font(.footnote)
-                    .multilineTextAlignment(.center)
-                    .padding(.horizontal, 32)
-            }
-
-            if let errorMessage = errorMessage {
-                Text(errorMessage)
-                    .foregroundColor(.white)
-                    .padding(.horizontal, 16)
-                    .padding(.vertical, 8)
-                    .background(Color.red.opacity(0.85))
-                    .clipShape(Capsule())
-                    .font(.footnote.bold())
-            }
-
-            Spacer()
+    private func status(for step: Step) -> StepStatus {
+        let current = coordinator.stage
+        switch step {
+        case .vision:
+            if current == .vision { return .current }
+            return current == .fast || current == .smart ? .done : .pending
+        case .fast:
+            if current == .fast { return .current }
+            return current == .smart ? .done : .pending
+        case .smart:
+            return current == .smart ? .current : .pending
         }
-        .padding(.horizontal, 24)
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(
-            LinearGradient(
-                gradient: Gradient(colors: [Color(.systemBackground), Color(.systemGray6)]),
-                startPoint: .topLeading,
-                endPoint: .bottomTrailing
+    }
+
+    private enum StepStatus { case pending, current, done }
+    
+    var body: some View {
+        GeometryReader { geo in
+            let maxWidth = geo.size.width
+            let cardPadding: CGFloat = 24
+            let imageSize = min(320, maxWidth - cardPadding * 2)
+
+            ScrollView(.vertical, showsIndicators: false) {
+                VStack(spacing: 24) {
+                    // Image card
+                    if let image = image {
+                        Image(uiImage: image)
+                            .resizable()
+                            .aspectRatio(contentMode: .fill)
+                            .frame(width: imageSize, height: imageSize)
+                            .clipped()
+                            .clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 24, style: .continuous)
+                                    .strokeBorder(.white.opacity(0.08))
+                            )
+                            .shadow(color: .black.opacity(0.08), radius: 24, x: 0, y: 10)
+                            .frame(maxWidth: .infinity)
+                    }
+
+                    // Indicator + steps card
+                    VStack(alignment: .leading, spacing: 16) {
+                        HStack {
+                            Spacer()
+                            AIBreathingIndicator(size: 88)
+                            Spacer()
+                        }
+                        VStack(alignment: .leading, spacing: 12) {
+                            stepRow(title: "Vision",
+                                    subtitle: coordinator.visionGuess?.description ?? "Reading labels & objects",
+                                    status: status(for: .vision),
+                                    duration: coordinator.visionDuration)
+                            stepRow(title: "OpenAI – Fast",
+                                    subtitle: coordinator.modelconfidence != nil
+                                    ? "Confidence: \(coordinator.modelconfidence ?? 0)"
+                                    : "Quick safety synthesis",
+                                    status: status(for: .fast),
+                                    duration: coordinator.fastDuration)
+                            stepRow(title: "OpenAI – Smart",
+                                    subtitle: "Deeper cross-checks",
+                                    status: status(for: .smart),
+                                    duration: coordinator.smartDuration)
+                        }
+                    }
+                    .padding(16)
+                    .background(
+                        RoundedRectangle(cornerRadius: 20, style: .continuous)
+                            .fill(.ultraThinMaterial)
+                    )
+                    .frame(maxWidth: .infinity)
+
+                    // Copy
+                    VStack(spacing: 8) {
+                        Text("AI Analysis")
+                            .font(.system(.title2, design: .rounded).weight(.semibold))
+                            .frame(maxWidth: .infinity)
+
+                        Text("Analyzing image for safety insights…")
+                            .foregroundStyle(.green)
+                            .font(.system(.body, design: .rounded))
+                            .multilineTextAlignment(.center)
+                            .frame(maxWidth: .infinity)
+
+                        Text("We're checking across multiple global safety standards to give you trustworthy results in just a few seconds.")
+                            .foregroundColor(.secondary)
+                            .font(.footnote)
+                            .multilineTextAlignment(.center)
+                            .padding(.horizontal, 12)
+                            .frame(maxWidth: .infinity)
+                    }
+                    .padding(.vertical, 4)
+
+                    if let errorMessage = errorMessage {
+                        Text(errorMessage)
+                            .foregroundColor(.white)
+                            .padding(.horizontal, 16)
+                            .padding(.vertical, 8)
+                            .background(Color.red.opacity(0.85))
+                            .clipShape(Capsule())
+                            .font(.footnote.bold())
+                            .frame(maxWidth: .infinity)
+                    }
+                }
+                .padding(.horizontal, cardPadding)
+                .padding(.vertical, 20)
+                .frame(maxWidth: .infinity, alignment: .top)
+            }
+            .background(
+                LinearGradient(
+                    gradient: Gradient(colors: [Color(.systemBackground), Color(.systemGray6)]),
+                    startPoint: .topLeading,
+                    endPoint: .bottomTrailing
+                )
+                .ignoresSafeArea()
             )
-            .ignoresSafeArea()
-        )
+            .interactiveDismissDisabled(false)
+            .onDisappear {
+                // If user swipes down to dismiss while work is ongoing, cancel as well
+                if coordinator.isComplete == false {
+                    viewModel.cancelScan()
+                }
+            }
+        }
     }
     
-    // Helper: progress as fraction
-//    private func progressFraction(for phase: ScanStepPhase) -> Double {
-//        guard let idx = ScanStepPhase.allCases.firstIndex(where: { $0 == phase })
-//        else { return 0.1 }
-//        return Double(idx+1) / Double(PhaseSteps.allSteps.count)
-//    }
-    
-//    // Helper: color for step
-//    private func color(for step: ScanStepPhase, current: ScanStepPhase) -> Color {
-//        if step == current { return .green }
-//        if PhaseSteps.isAfter(step, than: current) { return .secondary }
-//        return .primary
-//    }
-//    
-//    // Helper: status icon
-//    private func statusIcon(for step: ScanStepPhase, current: ScanStepPhase) -> some View {
-//        if step == current {
-//            return AnyView(
-//                ProgressView()
-//                    .progressViewStyle(CircularProgressViewStyle(tint: .green))
-//                    .scaleEffect(0.7)
-//            )
-//        } else if PhaseSteps.isAfter(step, than: current) {
-//            return AnyView(Image(systemName: "circle.fill")
-//                .foregroundColor(.gray.opacity(0.32))
-//                .font(.system(size: 15)))
-//        } else {
-//            return AnyView(Image(systemName: "checkmark.circle.fill")
-//                .foregroundColor(.green)
-//                .font(.system(size: 15)))
-//        }
-//    }
+    @ViewBuilder
+    private func stepRow(title: String, subtitle: String, status: StepStatus, duration: Double? = nil) -> some View {
+        HStack(alignment: .firstTextBaseline, spacing: 12) {
+            // Indicator
+            switch status {
+            case .done:
+                Image(systemName: "checkmark.circle.fill")
+                    .foregroundStyle(.green)
+            case .current:
+                ZStack {
+                    Circle().stroke(Color.accentColor.opacity(0.3), lineWidth: 3)
+                        .frame(width: 20, height: 20)
+                    Circle().fill(Color.accentColor)
+                        .frame(width: 8, height: 8)
+                        .scaleEffect(1.2)
+                        .animation(.easeInOut(duration: 0.8).repeatForever(autoreverses: true), value: UUID())
+                }
+            case .pending:
+                Image(systemName: "circle.fill")
+                    .foregroundStyle(.gray.opacity(0.3))
+            }
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text(title)
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(status == .pending ? .secondary : .primary)
+                    .lineLimit(1)
+                Text(subtitle)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(2)
+            }
+            .layoutPriority(1)
+
+            Spacer(minLength: 8)
+
+            if let duration {
+                Text(String(format: "%.1fs", duration))
+                    .font(.caption.monospacedDigit())
+                    .foregroundStyle(.secondary)
+                    .frame(minWidth: 44, alignment: .trailing)
+            }
+        }
+    }
 }
 
-//struct PhaseSteps {
-//    static let allSteps: [ScanStepPhase] = ScanStepPhase.allCases
-//    static func isAfter(_ p1: ScanStepPhase, than p2: ScanStepPhase) -> Bool {
-//        guard let idx1 = allSteps.firstIndex(where: { $0 == p1 }),
-//              let idx2 = allSteps.firstIndex(where: { $0 == p2 }) else { return false }
-//        return idx1 > idx2
-//    }
-//}
 
-struct SpinnerView: View {
-    @State private var rotateOuter = false
-    @State private var rotateInner = false
-    @State private var scalePulse = false
-
+/// A calm, “AI thinking” indicator: a breathing orb with a soft expanding halo.
+/// Drop-in replacement for a spinner.
+struct AIBreathingIndicator: View {
+    let size: CGFloat
+    @State private var breathe = false
+    @State private var haloPulse = false
+    
     var body: some View {
         ZStack {
-            // Pulsing glowing circle
+            // Expanding halo ring
             Circle()
-                .fill(Color.green.opacity(0.15))
-                .frame(width: 90, height: 90)
-                .scaleEffect(scalePulse ? 1.1 : 0.95)
-                .animation(Animation.easeInOut(duration: 1.2).repeatForever(autoreverses: true), value: scalePulse)
-
-            // Outer glowing arc
+                .stroke(Color.accentColor.opacity(0.28), lineWidth: size * 0.06)
+                .frame(width: size, height: size)
+                .scaleEffect(haloPulse ? 1.25 : 0.9)
+                .opacity(haloPulse ? 0.0 : 1.0)
+                .animation(.easeOut(duration: 1.2).repeatForever(autoreverses: false), value: haloPulse)
+            
+            // Core orb (breathing)
             Circle()
-                .trim(from: 0, to: 0.75)
-                .stroke(
-                    AngularGradient(gradient: Gradient(colors: [Color.green, Color.green.opacity(0.3)]), center: .center),
-                    style: StrokeStyle(lineWidth: 10, lineCap: .round)
-                )
-                .frame(width: 80, height: 80)
-                .blur(radius: 2)
-                .rotationEffect(.degrees(rotateOuter ? 360 : 0))
-                .animation(Animation.linear(duration: 2.5).repeatForever(autoreverses: false), value: rotateOuter)
-
-            // Inner fast rotating arc
+                .fill(Color.accentColor)
+                .frame(width: size * 0.22, height: size * 0.22)
+                .shadow(radius: size * 0.08)
+                .scaleEffect(breathe ? 1.18 : 0.92)
+                .opacity(breathe ? 0.95 : 0.75)
+                .animation(.easeInOut(duration: 1.0).repeatForever(autoreverses: true), value: breathe)
+            
             Circle()
-                .trim(from: 0.0, to: 0.2)
-                .stroke(
-                    AngularGradient(gradient: Gradient(colors: [Color.green.opacity(0.6), Color.green]), center: .center),
-                    style: StrokeStyle(lineWidth: 4, lineCap: .round)
-                )
-                .frame(width: 50, height: 50)
-                .rotationEffect(.degrees(rotateInner ? 360 : 0))
-                .animation(Animation.linear(duration: 0.8).repeatForever(autoreverses: false), value: rotateInner)
-
-            // Central dot
-            Circle()
-                .fill(Color.green)
-                .frame(width: 12, height: 12)
-                .shadow(color: Color.green.opacity(0.6), radius: 6, x: 0, y: 0)
+                .stroke(Color.accentColor.opacity(0.18), lineWidth: size * 0.03)
+                .frame(width: size * 0.5, height: size * 0.5)
+                .blur(radius: size * 0.03)
         }
+        .accessibilityLabel("Analyzing")
+        .accessibilityValue("Working")
         .onAppear {
-            rotateOuter = true
-            rotateInner = true
-            scalePulse = true
+            breathe = true
+            haloPulse = true
         }
     }
 }
-
-
-
-// Preview
-//#Preview {
-//    AnalysisInProgressView(image: UIImage(systemName: "photo"), coordinator: ScanAnalysisCoordinator())
-//}

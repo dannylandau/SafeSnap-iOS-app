@@ -190,7 +190,7 @@ public protocol VisionServiceType {
     func recognizeProduct(from image: CGImage) async throws -> ProductGuess
 }
 
-enum VisionError: Error {
+enum VisionError: LocalizedError {
     case missingAPIKey
     case invalidImageData
     case failedRequest

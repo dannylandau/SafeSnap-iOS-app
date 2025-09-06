@@ -41,9 +41,26 @@ public final class AlertCenter: ObservableObject {
             }
         }
     }
+    
+    /// Call when the alert is dismissed (from the presenter)
+        func didDismissCurrent() {
+            if queue.isEmpty {
+                current = nil
+            } else {
+                current = queue.removeFirst()
+            }
+        }
 
     public func clearAll() {
         queue.removeAll()
         current = nil
     }
+    
+    /// Defer showing until next runloop tick (avoids “presentation in progress”)
+        func showDeferred(_ alert: AppAlert) {
+            Task { @MainActor in
+                await Task.yield()
+                self.show(alert)
+            }
+        }
 }

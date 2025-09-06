@@ -10,18 +10,55 @@ import Foundation
 import SwiftUI
 import CoreGraphics
 
-enum ScanError: Identifiable, Error {
-    case openAIFailed(reason: String)
+enum ScanError: Identifiable, LocalizedError {
+    case openAIFailed(reason: String, underlying: Error? = nil)
     case missingOpenAIResult
 
     var id: String { localizedDescription }
 
-    var localizedDescription: String {
+    // Convenience
+    var underlyingError: Error? {
+        if case let .openAIFailed(_, underlying) = self {
+            return underlying
+        }
+        return nil
+    }
+    private var underlyingLE: LocalizedError? { underlyingError as? LocalizedError }
+
+    // LocalizedError forwarding
+    var errorDescription: String? {
+        if let d = underlyingLE?.errorDescription, !d.isEmpty {
+            return d
+        }
         switch self {
-        case .openAIFailed(let reason):
+        case .openAIFailed(let reason, _):
             return "Analysis failed: \(reason)"
         case .missingOpenAIResult:
             return "OpenAI result is missing."
+        }
+    }
+
+    var failureReason: String? {
+        if let r = underlyingLE?.failureReason, !r.isEmpty {
+            return r
+        }
+        switch self {
+        case .openAIFailed(let reason, _):
+            return reason
+        case .missingOpenAIResult:
+            return nil
+        }
+    }
+
+    var recoverySuggestion: String? {
+        if let s = underlyingLE?.recoverySuggestion, !s.isEmpty {
+            return s
+        }
+        switch self {
+        case .openAIFailed:
+            return "Check your connection and try again, or run the deeper check."
+        case .missingOpenAIResult:
+            return "Retry the scan. If it persists, force-quit and reopen the app."
         }
     }
 }
@@ -30,6 +67,12 @@ enum ScanError: Identifiable, Error {
 final class ScanAnalysisCoordinator: ObservableObject {
     @Published var currentPhase: AnalysisPhase = .preparing
     @Published var isComplete: Bool = false
+    @Published var stage: SafetyAnalyzer.Stage = .vision
+    @Published var visionDuration: Double? = nil
+    @Published var fastDuration: Double? = nil
+    @Published var smartDuration: Double? = nil
+    @Published var visionGuess: ProductGuess? = nil
+    @Published var modelconfidence: Double? = nil
 
     private let visionService: VisionService
     private let openAIService: OpenAIService
@@ -39,6 +82,7 @@ final class ScanAnalysisCoordinator: ObservableObject {
     private var safetyAnalysis: SafetyAnalysisResponse?
     private var thumbnail: UIImage?
     private var currentRequest: SafetyAnalysisRequest?
+    private var runningTask: Task<SafetyAnalysisResponse, Error>? = nil
     
     private var includeDog: Bool = false
     private var includeCat: Bool = false
@@ -85,6 +129,10 @@ final class ScanAnalysisCoordinator: ObservableObject {
 
         isComplete = true
     }
+    
+    func cancelAnalysis() {
+        runningTask?.cancel()
+    }
 
     func perform(_ phase: AnalysisPhase, imageData: Data) async throws {
         switch phase {
@@ -108,14 +156,36 @@ final class ScanAnalysisCoordinator: ObservableObject {
                 }
 
                 // Run analyzer: Vision recognition -> fast model -> optional smart model
-                let analysis = try await analyzer.run(
-                    image: cgImage,
-                    options: .init(petPreference: petPreference)
-                )
+                runningTask = Task {
+                    try await analyzer.run(
+                        image: cgImage,
+                        options: .init(petPreference: petPreference),
+                        visionGuess:  { [weak self] guess in
+                            Task { @MainActor in self?.visionGuess = guess }
+                        },
+                        modelConfidence: { [weak self] confidence in
+                            Task { @MainActor in self?.modelconfidence = confidence }
+                        },
+                        onStageChange: { [weak self] newStage in
+                            Task { @MainActor in self?.stage = newStage }
+                        },
+                        onStageTiming: { [weak self] stage, seconds in
+                            Task { @MainActor in
+                                switch stage {
+                                case .vision: self?.visionDuration = seconds
+                                case .fast:   self?.fastDuration = seconds
+                                case .smart:  self?.smartDuration = seconds
+                                }
+                            }
+                        }
+                    )
+                }
+                let analysis = try await runningTask!.value
+                runningTask = nil
 
                 self.safetyAnalysis = analysis
             } catch {
-                throw ScanError.openAIFailed(reason: error.localizedDescription)
+                throw ScanError.openAIFailed(reason: (error as? LocalizedError)?.localizedDescription ?? "Unknown", underlying: error)
             }
         case .report:
             guard let analysis = safetyAnalysis else { throw ScanError.missingOpenAIResult }
