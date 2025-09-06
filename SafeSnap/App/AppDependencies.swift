@@ -12,6 +12,7 @@ import Clerk
 @MainActor
 final class AppDependencies {
     // Shared instances
+    let geminiService: GeminiService
     let historyService: ScanHistoryService
     let visionService: VisionService
     let openAIService: OpenAIService
@@ -20,6 +21,7 @@ final class AppDependencies {
 
     init(clerk: Clerk) {
         self.clerk = clerk
+        self.geminiService = GeminiService(apiKey: Bundle.main.infoDictionaryValue(for: "GoogleGeminiAPIKey")!)
         self.historyService = ScanHistoryService()
         self.historyService.load()
         self.userSession = ClerkUserSession(clerk: clerk)

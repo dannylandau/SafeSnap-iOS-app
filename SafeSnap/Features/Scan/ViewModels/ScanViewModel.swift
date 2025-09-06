@@ -43,7 +43,7 @@ final class ScanViewModel: ObservableObject {
 
         Task {
             do {
-                try await coordinator.start(with: imageData, thumbnail: thumbnail, includeDog: includeDog, includeCat: includeCat, includeChildren: includeChildren)
+                try await coordinator.startGeminiScan(image: uiImage, options: SafetyOptions(includeDogs: includeDog, includeCats: includeCat))
                 if let result = await coordinator.latestHistoryItem {
                     let viewModel = RecognitionResultViewModel(image: uiImage, from: result)
                     await MainActor.run {
@@ -79,6 +79,7 @@ final class ScanViewModel: ObservableObject {
     }
     
     func cancelScan() {
+        print("🛑 Cancelling scan")
         Task { @MainActor in
             self.coordinator.cancelAnalysis()
             self.phase = .idle
