@@ -69,7 +69,7 @@ struct ScanView: View {
         }
         .sheet(isPresented: .constant(viewModel.phase.isAnalyzing)) {
             if case let .analyzing(image) = viewModel.phase {
-                AnalysisInProgressView(image: image, coordinator: viewModel.coordinator)
+                AnalysisInProgressView(image: image, viewModel: viewModel)
             }
         }
         .sheet(item: $viewModel.resultVM, onDismiss: {

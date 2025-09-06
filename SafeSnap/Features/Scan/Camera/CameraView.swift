@@ -3,6 +3,7 @@
 //  SafeSnap
 //
 import SwiftUI
+import UIKit
 
 struct CameraView: View {
     @Environment(\.presentationMode) private var presentationMode
@@ -13,12 +14,25 @@ struct CameraView: View {
 
     /// Internal loading / analysis state
     @State private var isAnalyzing = false
+    @State private var frozenImage: UIImage? = nil
 //    @State private var currentPhase: ScanPhase = .vision
 
     var body: some View {
         ZStack {
-            CameraPreview(session: viewModel.session)
-                .ignoresSafeArea()
+            Group {
+                if let frozen = frozenImage {
+                    Image(uiImage: frozen)
+                        .resizable()
+                        .scaledToFill()
+                        .ignoresSafeArea()
+                        .transition(.opacity)
+                } else {
+                    CameraPreview(session: viewModel.session)
+                        .ignoresSafeArea()
+                }
+            }
+            .overlay(Color.black.opacity(isAnalyzing ? 0.12 : 0))
+            .animation(.easeInOut(duration: 0.2), value: isAnalyzing)
 
             VStack {
                 Capsule()
@@ -53,16 +67,20 @@ struct CameraView: View {
                     .padding(.horizontal, 24)
                 Button(action: viewModel.capturePhoto) {
                     Circle()
-                        .fill(Color.white)
+                        .fill(Color.white.opacity(isAnalyzing ? 0.6 : 1.0))
                         .frame(width: 70, height: 70)
                         .shadow(radius: 10)
                 }
+                .disabled(isAnalyzing)
             }
             .frame(maxHeight: .infinity, alignment: .bottom)
         }
         .onChange(of: viewModel.capturedImage) { _, newValue in
             guard let image = newValue else { return }
-            isAnalyzing = true
+            // Freeze the camera feed with the captured still before showing the animation
+            frozenImage = image
+            withAnimation(.easeInOut(duration: 0.2)) { isAnalyzing = true }
+            UIAccessibility.post(notification: .announcement, argument: "Photo captured. Analyzing…")
             DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
                 let generator = UIImpactFeedbackGenerator(style: .light)
                 generator.impactOccurred()

@@ -77,4 +77,15 @@ final class ScanViewModel: ObservableObject {
         guard let data = lastImageData, let image = lastUIImage else { return }
         beginScan(with: data, uiImage: image, includeDog: lastIncludeDog, includeCat: lastIncludeCat, includeChildren: lastIncludeChildren)
     }
+    
+    func cancelScan() {
+        Task { @MainActor in
+            self.coordinator.cancelAnalysis()
+            self.phase = .idle
+            self.resultVM = nil
+            self.scanError = nil
+            self.lastImageData = nil
+            self.lastUIImage = nil
+        }
+    }
 }
