@@ -14,8 +14,7 @@ struct ScanTab: View {
 
     init(dependencies: AppDependencies) {
         let coordinator = ScanAnalysisCoordinator(
-            visionService: dependencies.visionService,
-            openAIService: dependencies.openAIService,
+            geminiService: dependencies.geminiService,
             historyService: dependencies.historyService
         )
         _viewModel = StateObject(

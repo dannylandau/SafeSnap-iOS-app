@@ -9,6 +9,7 @@
 import Foundation
 import SwiftUI
 import CoreGraphics
+import UIKit
 
 enum ScanError: Identifiable, LocalizedError {
     case openAIFailed(reason: String, underlying: Error? = nil)
@@ -63,6 +64,16 @@ enum ScanError: Identifiable, LocalizedError {
     }
 }
 
+public struct SafetyOptions {
+    var includeDogs: Bool
+    var includeCats: Bool
+}
+extension SafetyOptions {
+    func asPromptFlags() -> String {
+        "includeDogs=\(includeDogs), includeCats=\(includeCats)"
+    }
+}
+
 @MainActor
 final class ScanAnalysisCoordinator: ObservableObject {
     @Published var currentPhase: AnalysisPhase = .preparing
@@ -73,11 +84,11 @@ final class ScanAnalysisCoordinator: ObservableObject {
     @Published var smartDuration: Double? = nil
     @Published var visionGuess: ProductGuess? = nil
     @Published var modelconfidence: Double? = nil
+    @Published var partial: String? = nil
+    @Published var scanError: ScanError?
 
-    private let visionService: VisionService
-    private let openAIService: OpenAIService
+    private let geminiService: GeminiService
     private let historyService: ScanHistoryService
-    private let analyzer: SafetyAnalyzer
 
     private var safetyAnalysis: SafetyAnalysisResponse?
     private var thumbnail: UIImage?
@@ -90,142 +101,69 @@ final class ScanAnalysisCoordinator: ObservableObject {
     
     @Published var latestHistoryItem: ScanHistoryItem?
 
-    init(visionService: VisionService, openAIService: OpenAIService, historyService: ScanHistoryService) {
-        self.visionService = visionService
-        self.openAIService = openAIService
+    init(geminiService: GeminiService, historyService: ScanHistoryService) {
+        self.geminiService = geminiService
         self.historyService = historyService
-        self.analyzer = SafetyAnalyzer(vision: visionService, openAI: openAIService)
-    }
-
-    func start(with imageData: Data, thumbnail: UIImage?, includeDog: Bool, includeCat: Bool, includeChildren: Bool) async throws {
-        self.thumbnail = thumbnail
-        self.includeDog = includeDog
-        self.includeCat = includeCat
-        self.includeChildren = includeChildren
-
-        // Build a request snapshot for history toggles; analyzer handles Vision + OpenAI orchestration
-        self.currentRequest = SafetyAnalysisRequest(
-            includeDogs: includeDog,
-            includeCats: includeCat,
-            includeChildren: includeChildren
-        )
-
-        let pipeline: [AnalysisPhase] = [.preparing, .openAI, .report]
-        for phase in pipeline {
-            guard !Task.isCancelled else {
-                print("⚠️ Task was cancelled — exiting coordinator early")
-                return
-            }
-
-            currentPhase = phase
-            do {
-                try await perform(phase, imageData: imageData)
-            } catch is CancellationError {
-                throw CancellationError()
-            } catch {
-                throw error
-            }
-        }
-
-        isComplete = true
     }
     
-    func cancelAnalysis() {
-        runningTask?.cancel()
-    }
-
-    func perform(_ phase: AnalysisPhase, imageData: Data) async throws {
-        switch phase {
-        case .preparing:
-            break
-        case .openAI:
-            do {
-                // Map UI toggles to analyzer options
-                let petPreference: PetPreference = {
-                    switch (includeDog, includeCat) {
-                    case (true, true): return .both
-                    case (true, false): return .dog
-                    case (false, true): return .cat
-                    default: return .none
+    @MainActor
+    func startGeminiScan(image: UIImage, options: SafetyOptions) async throws {
+        currentPhase = .preparing
+                let result = try await geminiService.analyzeSafety(
+                    image: image,
+                    options: options,
+                    streamToken: { [weak self] _ in
+                        Task { @MainActor in self?.partial = "Analyzing…" }
                     }
-                }()
+                )
+                // Persist image and build history item
+                let imageData: Data = image.jpegData(compressionQuality: 0.9) ?? Data()
+                self.safetyAnalysis = result
 
-                // Convert image bytes -> CGImage
-                guard let uiImage = UIImage(data: imageData), let cgImage = uiImage.cgImage else {
-                    throw NSError(domain: "SafeSnap", code: -11, userInfo: [NSLocalizedDescriptionKey: "Input data is not a valid image"])
-                }
+                // Map options to history toggles
+                let toggles = ScanHistoryItem.UserToggles(
+                    includeDogs: options.includeDogs,
+                    includeCats: options.includeCats,
+                    includeChildren: true
+                )
 
-                // Run analyzer: Vision recognition -> fast model -> optional smart model
-                runningTask = Task {
-                    try await analyzer.run(
-                        image: cgImage,
-                        options: .init(petPreference: petPreference),
-                        visionGuess:  { [weak self] guess in
-                            Task { @MainActor in self?.visionGuess = guess }
-                        },
-                        modelConfidence: { [weak self] confidence in
-                            Task { @MainActor in self?.modelconfidence = confidence }
-                        },
-                        onStageChange: { [weak self] newStage in
-                            Task { @MainActor in self?.stage = newStage }
-                        },
-                        onStageTiming: { [weak self] stage, seconds in
-                            Task { @MainActor in
-                                switch stage {
-                                case .vision: self?.visionDuration = seconds
-                                case .fast:   self?.fastDuration = seconds
-                                case .smart:  self?.smartDuration = seconds
-                                }
-                            }
-                        }
-                    )
-                }
-                let analysis = try await runningTask!.value
-                runningTask = nil
+                let imageURL = try? self.persistScanImage(imageData)
 
-                self.safetyAnalysis = analysis
-            } catch {
-                throw ScanError.openAIFailed(reason: (error as? LocalizedError)?.localizedDescription ?? "Unknown", underlying: error)
-            }
-        case .report:
-            guard let analysis = safetyAnalysis else { throw ScanError.missingOpenAIResult }
+                // Build a minimal ProductIdentification from Gemini result
+                let product = ProductIdentification(
+                    productType: result.productType,
+                    productName: result.productName,
+                    brandCandidates: [],
+                    labels: [],
+                    objects: [],
+                    detectedText: nil,
+                    confidence: result.recognitionConfidence
+                )
 
-            let toggles = ScanHistoryItem.UserToggles(
-                includeDogs: includeDog,
-                includeCats: includeCat,
-                includeChildren: includeChildren
-            )
+                let item = ScanHistoryBuilder.build(
+                    product: product,
+                    analysis: result,
+                    imageRef: imageURL,
+                    imageData: imageData,
+                    userToggles: toggles,
+                    visionContextRef: nil,
+                    model: "gemini-1.5-flash",
+                    promptVersion: "v1-gemini"
+                )
+                self.historyService.add(item)
+                self.latestHistoryItem = item
+                self.isComplete = true
 
-            let imageURL = try? persistScanImage(imageData)
-
-            // Minimal ProductIdentification synthesized from the analysis (Vision confidence now available)
-            let product = ProductIdentification(
-                productType: analysis.productType,
-                productName: analysis.productName,
-                brandCandidates: [],
-                labels: [],
-                objects: [],
-                detectedText: nil,
-                confidence: analysis.recognitionConfidence
-            )
-
-            let item = ScanHistoryBuilder.build(
-                product: product,
-                analysis: analysis,
-                imageRef: imageURL,
-                imageData: imageData,
-                userToggles: toggles,
-                visionContextRef: nil,
-                model: "gpt-5",
-                promptVersion: "v2"
-            )
-            historyService.add(item)
-            self.latestHistoryItem = item
-        default:
-            break
-        }
+                // Advance phase to report for UI to render
+                self.currentPhase = .report
+            
     }
-    
+
+    func cancelAnalysis() {
+        geminiService.cancelAnalysis()
+        currentPhase = .preparing
+    }
+
     private func persistScanImage(_ data: Data) throws -> URL {
         let fm = FileManager.default
         let docs = try fm.url(for: .documentDirectory, in: .userDomainMask, appropriateFor: nil, create: true)

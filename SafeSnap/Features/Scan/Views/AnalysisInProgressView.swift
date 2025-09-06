@@ -68,22 +68,6 @@ struct AnalysisInProgressView: View {
                             AIBreathingIndicator(size: 88)
                             Spacer()
                         }
-                        VStack(alignment: .leading, spacing: 12) {
-                            stepRow(title: "Vision",
-                                    subtitle: coordinator.visionGuess?.description ?? "Reading labels & objects",
-                                    status: status(for: .vision),
-                                    duration: coordinator.visionDuration)
-                            stepRow(title: "OpenAI – Fast",
-                                    subtitle: coordinator.modelconfidence != nil
-                                    ? "Confidence: \(coordinator.modelconfidence ?? 0)"
-                                    : "Quick safety synthesis",
-                                    status: status(for: .fast),
-                                    duration: coordinator.fastDuration)
-                            stepRow(title: "OpenAI – Smart",
-                                    subtitle: "Deeper cross-checks",
-                                    status: status(for: .smart),
-                                    duration: coordinator.smartDuration)
-                        }
                     }
                     .padding(16)
                     .background(
@@ -138,8 +122,8 @@ struct AnalysisInProgressView: View {
             )
             .interactiveDismissDisabled(false)
             .onDisappear {
-                // If user swipes down to dismiss while work is ongoing, cancel as well
-                if coordinator.isComplete == false {
+//                 If user swipes down to dismiss while work is ongoing, cancel as well
+                if coordinator.isComplete == false, coordinator.currentPhase != .preparing {
                     viewModel.cancelScan()
                 }
             }
