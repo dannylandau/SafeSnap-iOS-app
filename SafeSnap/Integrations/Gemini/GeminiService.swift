@@ -27,9 +27,9 @@ private func decodeGoogleError(from data: Data) -> String? {
 }
 
 final class GeminiService {
-    private let endpoint = URL(string: "https://api.gemini.example.com/v1/analyze")!
     private let model = "gemini-1.5-flash"
     private var currentTask: URLSessionDataTask?
+    private let session = URLSession(configuration: .default)
     
     private let apiKey: String
     
@@ -40,12 +40,12 @@ final class GeminiService {
     func analyzeSafety(image: UIImage, options: SafetyOptions, streamToken: @escaping (String) -> Void) async throws -> SafetyAnalysisResponse {
         streamToken("Analyzing with Gemini…")
         let body = try makeRequestBody(image: image, options: options)
-        let (data, response) = try await makeNonStreamingRequest(body: body)
-        
+        let (data, response, taskRef) = try await makeNonStreamingRequest(body: body)
+        self.currentTask = taskRef
         guard let http = response as? HTTPURLResponse, (200..<300).contains(http.statusCode) else {
             throw URLError(.badServerResponse)
         }
-        
+
         struct GenerateContentResponse: Decodable {
             struct Candidate: Decodable {
                 struct Content: Decodable {
@@ -57,21 +57,52 @@ final class GeminiService {
             let candidates: [Candidate]?
         }
         let api = try JSONDecoder().decode(GenerateContentResponse.self, from: data)
-        guard let text = api.candidates?.first?.content.parts.first?.text,
-              let finalData = text.data(using: .utf8) else {
+        guard let rawText = api.candidates?.first?.content.parts.first?.text else {
             throw NSError(domain: "GeminiService", code: -2,
                           userInfo: [NSLocalizedDescriptionKey: "Gemini returned no JSON text"])
         }
-        print(text)
-        let result = try JSONDecoder().decode(SafetyAnalysisResponse.self, from: finalData)
-        return result
+
+        // Sanitize: strip code fences and extraneous text before first '{' and after last '}'
+        let sanitizedText: String = {
+            var t = rawText.trimmingCharacters(in: .whitespacesAndNewlines)
+            if t.hasPrefix("```") { t = t.replacingOccurrences(of: "```json", with: "").replacingOccurrences(of: "```", with: "") }
+            if let start = t.firstIndex(of: "{"), let end = t.lastIndex(of: "}") { return String(t[start...end]) }
+            return t
+        }()
+        
+        if let finalData = sanitizedText.data(using: .utf8) {
+            do {
+                return try JSONDecoder().decode(SafetyAnalysisResponse.self, from: finalData)
+            } catch {
+                // If likely truncation, retry once with higher token limit
+                if sanitizedText.count > 0 {
+                    streamToken("Retrying with larger token limit…")
+                    let retryBody = try makeRequestBody(image: image, options: options, maxTokensOverride: 768)
+                    let (retryData, retryResponse, retryTask) = try await makeNonStreamingRequest(body: retryBody)
+                    self.currentTask = retryTask
+                    guard let http2 = retryResponse as? HTTPURLResponse, (200..<300).contains(http2.statusCode) else {
+                        throw URLError(.badServerResponse)
+                    }
+                    let retryApi = try JSONDecoder().decode(GenerateContentResponse.self, from: retryData)
+                    guard let retryText = retryApi.candidates?.first?.content.parts.first?.text,
+                          let retryFinal = retryText.data(using: .utf8) else {
+                        throw NSError(domain: "GeminiService", code: -3, userInfo: [NSLocalizedDescriptionKey: "Gemini returned no JSON on retry"])
+                    }
+                    return try JSONDecoder().decode(SafetyAnalysisResponse.self, from: retryFinal)
+                }
+                throw error
+            }
+        } else {
+            throw NSError(domain: "GeminiService", code: -4, userInfo: [NSLocalizedDescriptionKey: "Unable to encode Gemini text as UTF-8"])
+        }
     }
     
     func cancelAnalysis() {
         currentTask?.cancel()
+        currentTask = nil
     }
     
-    private func makeRequestBody(image: UIImage, options: SafetyOptions) throws -> Data {
+    private func makeRequestBody(image: UIImage, options: SafetyOptions, maxTokensOverride: Int? = nil) throws -> Data {
         guard let imageData = image.jpegData(compressionQuality: 0.9) else {
             throw NSError(domain: "GeminiService", code: -1, userInfo: [NSLocalizedDescriptionKey: "Unable to encode image"])
         }
@@ -91,10 +122,18 @@ final class GeminiService {
                 return "Do not include pet-specific analysis. Set dogSafetyScore and catSafetyScore to null. Set petSafety.dogs and petSafety.cats to empty arrays []."
             }
         }()
+        let specificityDirective: String = """
+        Be maximally specific when naming the product. If it's a mushroom, identify the species (e.g., 'shiitake', 'chanterelle'); if it's a plant/fruit/vegetable/herb/spice or any item with varieties, name the exact type/variety where possible (e.g., 'Gala apple', 'Roma tomato', 'curly parsley'). Use context from the image (shape, color, texture, packaging text) to disambiguate. Score safety for the specific type you identify. If two types are plausible, pick the most likely and reflect uncertainty via recognitionConfidence and modelConfidence. Do NOT invent fields outside the schema.
+        """
+        let ocrDirective: String = """
+        Read any visible text directly from the image (OCR). Extract brand names, variety/species, flavor, size/weight, and any qualifiers (e.g., organic). Prefer OCR tokens to determine the exact product/variety name. Do not include the OCR text itself in your output; return JSON only that matches the schema. When OCR and visual cues agree, raise recognitionConfidence; when they conflict or are unclear, lower it and choose the most likely single specific type.
+        """
         
         let generationConfig: [String: Any] = [
             "temperature": 0.2,
-            "maxOutputTokens": 512,
+            "topK": 40,
+            "topP": 0.9,
+            "maxOutputTokens": maxTokensOverride ?? 640,
             "responseMimeType": "application/json",
             "responseSchema": SafetyAnalysisSchema.geminiResponseSchema()
         ]
@@ -103,14 +142,17 @@ final class GeminiService {
             "systemInstruction": [
                 "parts": [
                     ["text": "You are a product safety analyst. Return JSON only that matches the provided schema."],
-                    ["text": petDirective]
+                    ["text": petDirective],
+                    ["text": ocrDirective],
+                    ["text": specificityDirective],
+                    ["text": "Examples: 1) Image shows brown gills, convex cap with white stem → 'Mushroom — shiitake'. 2) Small red apple with yellow streaks, label 'Gala' visible → 'Apple — Gala'. 3) Long plum tomato on vine → 'Tomato — Roma'."],
                 ]
             ],
             "contents": [[
                 "role": "user",
                 "parts": [
                     ["inline_data": ["mime_type": "image/jpeg", "data": base64Image]],
-                    ["text": "Use integers 0-100 for scores, modelConfidence 0.0-1.0. Use nulls or empty arrays when unknown. \n\nPet rules: \(petDirective)" ]
+                    ["text": "Use integers 0-100 for scores, modelConfidence 0.0-1.0. Use nulls or empty arrays when unknown.\n\nOCR: Read any visible label/packaging text from the image and use it to decide the exact product/variety. Do not print OCR text; return JSON only.\n\nPet rules: \(petDirective)\n\nSpecificity: \(specificityDirective)\nAvoid generic names like 'mushroom', 'apple', 'lettuce' unless recognitionConfidence < 0.5." ]
                 ]
             ]],
             "generationConfig": generationConfig
@@ -136,7 +178,7 @@ final class GeminiService {
         return try await URLSession.shared.bytes(for: req)
     }
     
-    private func makeNonStreamingRequest(body: Data) async throws -> (Data, URLResponse) {
+    private func makeNonStreamingRequest(body: Data) async throws -> (Data, URLResponse, URLSessionDataTask) {
         var comps = URLComponents(string:
             "https://generativelanguage.googleapis.com/v1beta/models/\(model):generateContent"
         )!
@@ -145,14 +187,25 @@ final class GeminiService {
         req.httpMethod = "POST"
         req.httpBody = body
         req.setValue("application/json; charset=UTF-8", forHTTPHeaderField: "Content-Type")
-        let (data, response) = try await URLSession.shared.data(for: req)
-        if let http = response as? HTTPURLResponse, !(200..<300).contains(http.statusCode) {
-            let msg = decodeGoogleError(from: data) ?? "HTTP \(http.statusCode)"
-            print("Gemini generateContent error: \(msg)")
-            throw NSError(domain: "GeminiService", code: http.statusCode,
-                          userInfo: [NSLocalizedDescriptionKey: msg])
+
+        return try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<(Data, URLResponse, URLSessionDataTask), Error>) in
+            var task: URLSessionDataTask?
+            task = session.dataTask(with: req) { data, response, error in
+                if let error = error { return continuation.resume(throwing: error) }
+                guard let data = data, let response = response, let task = task else {
+                    return continuation.resume(throwing: URLError(.badServerResponse))
+                }
+                if let http = response as? HTTPURLResponse, !(200..<300).contains(http.statusCode) {
+                    let msg = decodeGoogleError(from: data) ?? "HTTP \(http.statusCode)"
+                    print("Gemini generateContent error: \(msg)")
+                    continuation.resume(throwing: NSError(domain: "GeminiService", code: http.statusCode,
+                                                          userInfo: [NSLocalizedDescriptionKey: msg]))
+                } else {
+                    continuation.resume(returning: (data, response, task))
+                }
+            }
+            task?.resume()
         }
-        return (data, response)
     }
     
     private func extractStreamErrorText(from bytes: URLSession.AsyncBytes) async throws -> String? {
