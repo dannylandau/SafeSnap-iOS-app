@@ -61,8 +61,8 @@ final class AccountViewModel: ObservableObject {
         }
 
         let scanCount = records.count
-        let avgScore = Double(records.map(\.analysis.overallSafetyScore).reduce(0, +)) / Double(scanCount)
-        let safePercent = Double(records.filter { $0.analysis.overallSafetyScore >= 7 }.count) / Double(scanCount) * 100
+        let avgScore = Double(records.map(\.analysis.overallSafetyScore).reduce(0, +))/10 / Double(scanCount)
+        let safePercent = Double(records.filter { $0.analysis.overallSafetyScore >= 70 }.count) / Double(scanCount) * 100
 
         stats = [
             Stat(label: "Scans", value: "\(scanCount)"),

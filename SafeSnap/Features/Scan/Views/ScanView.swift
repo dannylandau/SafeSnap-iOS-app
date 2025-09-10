@@ -68,7 +68,9 @@ struct ScanView: View {
             }
         }
         .sheet(isPresented: .constant(viewModel.phase.isAnalyzing), onDismiss: {
-            viewModel.cancelScan()
+            if case .analyzing(_) = viewModel.phase {
+                viewModel.cancelScan()
+            }
         }) {
             if case let .analyzing(image) = viewModel.phase {
                 AnalysisInProgressView(image: image, viewModel: viewModel)

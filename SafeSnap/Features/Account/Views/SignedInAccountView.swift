@@ -26,7 +26,7 @@ struct SignedInAccountView: View {
                             .foregroundColor(.green)
                             .font(.title3)
                         VStack(alignment: .leading, spacing: 4) {
-                            Text("Google Vision API is connected and working properly")
+                            Text("Google Gemini API is connected and working properly")
                                 .font(.subheadline)
                                 .foregroundColor(.secondary)
                         }
@@ -157,7 +157,7 @@ struct SignedInAccountView: View {
                 Section {
                     VStack(spacing: 4) {
                         Text("SafeSnap \(viewModel.appVersion)")
-                        Text("Powered by Google Vision AI")
+                        Text("Powered by Google Gemini AI")
                         if viewModel.demoMode {
                             Text("Demo Version – All features functional")
                         }
