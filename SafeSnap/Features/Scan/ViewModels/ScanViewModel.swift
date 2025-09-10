@@ -51,6 +51,10 @@ final class ScanViewModel: ObservableObject {
                         self.phase = .result(viewModel)
                     }
                 }
+            } catch is CancellationError {
+                await MainActor.run {
+                    self.phase = .idle
+                }
             } catch let error as ScanError {
                 await MainActor.run {
                     self.phase = .error

@@ -67,7 +67,9 @@ struct ScanView: View {
                 }
             }
         }
-        .sheet(isPresented: .constant(viewModel.phase.isAnalyzing)) {
+        .sheet(isPresented: .constant(viewModel.phase.isAnalyzing), onDismiss: {
+            viewModel.cancelScan()
+        }) {
             if case let .analyzing(image) = viewModel.phase {
                 AnalysisInProgressView(image: image, viewModel: viewModel)
             }
@@ -156,7 +158,7 @@ struct ScanView: View {
                 print("⚠️ selectedPhoto is nil — likely user cancelled or selection failed")
                 return
             }
-            
+
             Task {
                 do {
                     if let data = try await item.loadTransferable(type: Data.self),
@@ -168,6 +170,8 @@ struct ScanView: View {
                 } catch {
                     print("Failed to load photo: \(error.localizedDescription)")
                 }
+                // Important: reset selection so the same asset can be picked again next time
+                await MainActor.run { selectedPhoto = nil }
             }
         }
     }
