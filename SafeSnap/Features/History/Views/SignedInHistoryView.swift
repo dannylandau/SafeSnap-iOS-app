@@ -173,9 +173,9 @@ struct SignedInHistoryView: View {
         HStack(spacing: 12) {
             statCard(title: "Total Scans", value: "\(vm.records.count)")
             statCard(title: "Avg Score",
-                     value: String(format: "%.1f", vm.records.map(\.analysis.overallSafetyScore).average()))
+                     value: String(format: "%.1f", vm.records.map(\.analysis.overallSafetyScore).average()/10))
             statCard(title: "Safe Items",
-                     value: "\(vm.records.filter { $0.analysis.overallSafetyScore >= 7 }.count * 100 / max(1, vm.records.count))%")
+                     value: "\(vm.records.filter { $0.analysis.overallSafetyScore >= 70 }.count * 100 / max(1, vm.records.count))%")
         }
     }
 
@@ -220,6 +220,21 @@ struct SignedInHistoryView: View {
         }
     }
     
+    private func thumbnailURL(for url: URL?) -> URL? {
+        guard let url = url else { return nil }
+        let dir = url.deletingLastPathComponent()
+        let stem = url.deletingPathExtension().lastPathComponent
+        let thumbName = stem + "_thumb.jpg"
+        return dir.appendingPathComponent(thumbName)
+    }
+    
+    private func loadImage(from url: URL?) -> UIImage? {
+        guard let url = url else { return nil }
+        if let img = UIImage(contentsOfFile: url.path) { return img }
+        if let data = try? Data(contentsOf: url) { return UIImage(data: data) }
+        return nil
+    }
+
     private func loadHistoryImage(from url: URL?) -> UIImage? {
         guard let url else { return nil }
         if let img = UIImage(contentsOfFile: url.path) { return img }
@@ -229,11 +244,19 @@ struct SignedInHistoryView: View {
 
     private func recordRow(item: ScanHistoryItem) -> some View {
         HStack(spacing: 12) {
-            if let url = item.imageRef, let img = UIImage(contentsOfFile: url.path) {
+            let thumbURL = thumbnailURL(for: item.imageRef)
+            if let url = thumbURL, let img = loadImage(from: url) {
                 Image(uiImage: img)
                     .resizable().scaledToFill()
                     .frame(width: 50, height: 50)
                     .cornerRadius(8)
+                    .clipped()
+            } else if let fullURL = item.imageRef, let img = loadImage(from: fullURL) {
+                Image(uiImage: img)
+                    .resizable().scaledToFill()
+                    .frame(width: 50, height: 50)
+                    .cornerRadius(8)
+                    .clipped()
             } else {
                 ZStack {
                     Rectangle()
@@ -251,7 +274,7 @@ struct SignedInHistoryView: View {
                     .font(.caption).foregroundColor(.secondary)
             }
             Spacer()
-            Text("\(Int(item.analysis.overallSafetyScore))/10")
+            Text("\(Int(Double(item.analysis.overallSafetyScore)/10))/10")
                 .font(.subheadline.bold())
                 .padding(.horizontal, 8)
                 .padding(.vertical, 4)
