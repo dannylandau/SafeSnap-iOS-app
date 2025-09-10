@@ -26,9 +26,6 @@ struct ResultView: View {
         ScrollViewReader { proxy in
             ScrollView { content }
                 .coordinateSpace(name: "scroll")
-                .safeAreaInset(edge: .top) {
-                    Color.clear.frame(height: headerHeight + 8) // offset *content* only; keeps blur visible
-                }
                 .onChange(of: vm.selectedSection) { _ in
                     withAnimation(.easeInOut) {
                         switch vm.selectedSection {
@@ -72,16 +69,19 @@ struct ResultView: View {
             dataSourcesSection()
             timestampFooter()
         }
-        .padding(.top, 16)
+        .padding(.top, 8)
     }
     
     private func shareButton() -> some View {
         HStack {
             Spacer()
             Button { prepareShare() } label: {
-                Image(systemName: "square.and.arrow.up")
+                Text("Share").font(.headline)
             }
-            .padding()
+            .buttonStyle(.borderedProminent)
+            .controlSize(.regular)
+            .padding(.trailing)
+            .accessibilityLabel("Share")
         }
     }
 
@@ -259,82 +259,82 @@ struct ResultView: View {
     }
 
     // MARK: — Rigid Overlay Header
-    private func overlayHeaderBar() -> some View {
-        VStack(spacing: 8) {
-            HStack(alignment: .top, spacing: 12) {
-                // Back
-                Button { dismiss() } label: {
-                    Image(systemName: "chevron.left")
-                        .font(.headline)
-                        .foregroundColor(.white)
-                        .padding(10)
-                        .background(.white.opacity(0.15))
-                        .clipShape(Circle())
-                        .accessibilityLabel("Back")
-                }
-
-                // Title & Category — wrap fully, no truncation
-                VStack(alignment: .leading, spacing: 4) {
-                    Text(vm.productName)
-                        .font(.title2.bold())
-                        .foregroundColor(.white)
-                        .fixedSize(horizontal: false, vertical: true) // allow multi-line
-                    Text(vm.category)
-                        .font(.title3)
-                        .foregroundColor(.white.opacity(0.9))
-                        .fixedSize(horizontal: false, vertical: true)
-                }
-                .padding(.top, 12)
-
-                Spacer(minLength: 8)
-
-                // Share
-                Button { prepareShare() } label: {
-                    Image(systemName: "square.and.arrow.up")
-                        .font(.headline)
-                        .foregroundColor(.white)
-                        .padding(10)
-                        .background(.white.opacity(0.15))
-                        .clipShape(Circle())
-                        .accessibilityLabel("Share")
-                }
-            }
-
-            // Optional: focused score chip to keep context visible
-            HStack() {
-                Spacer()
-                Text("\(selectedScore10())/10")
-                    .font(.subheadline.monospacedDigit()).bold()
-                    .foregroundColor(.white)
-                    .padding(.horizontal, 10).padding(.vertical, 6)
-                    .background(.white.opacity(0.15))
-                    .clipShape(Capsule())
-                Spacer()
-            }
-        }
-        .padding(.horizontal)
-        .padding(.top, 12)
-        .padding(.bottom, 10)
-        .background(
-            ZStack {
-                // Liquid glass blur base
-                Rectangle().fill(.ultraThinMaterial)
-                // Subtle color tint to keep brand/color context
-                LinearGradient(
-                    gradient: Gradient(colors: [selectedColor.opacity(0.25), selectedColor.opacity(0.15)]),
-                    startPoint: .topLeading,
-                    endPoint: .bottomTrailing
-                )
-            }
-        )
-        .clipShape(RoundedRectangle(cornerRadius: 40, style: .continuous))
-        .overlay(
-            RoundedRectangle(cornerRadius: 40, style: .continuous)
-                .strokeBorder(Color.white.opacity(0.25), lineWidth: 1)
-        )
-        .ignoresSafeArea(edges: .top)
-        .shadow(color: .black.opacity(0.15), radius: 8, y: 2)
-    }
+//    private func overlayHeaderBar() -> some View {
+//        VStack(spacing: 8) {
+//            HStack(alignment: .top, spacing: 12) {
+//                // Back
+//                Button { dismiss() } label: {
+//                    Image(systemName: "chevron.left")
+//                        .font(.headline)
+//                        .foregroundColor(.white)
+//                        .padding(10)
+//                        .background(.white.opacity(0.15))
+//                        .clipShape(Circle())
+//                        .accessibilityLabel("Back")
+//                }
+//
+//                // Title & Category — wrap fully, no truncation
+//                VStack(alignment: .leading, spacing: 4) {
+//                    Text(vm.productName)
+//                        .font(.title2.bold())
+//                        .foregroundColor(.white)
+//                        .fixedSize(horizontal: false, vertical: true) // allow multi-line
+//                    Text(vm.category)
+//                        .font(.title3)
+//                        .foregroundColor(.white.opacity(0.9))
+//                        .fixedSize(horizontal: false, vertical: true)
+//                }
+//                .padding(.top, 12)
+//
+//                Spacer(minLength: 8)
+//
+//                // Share
+//                Button { prepareShare() } label: {
+//                    Image(systemName: "square.and.arrow.up")
+//                        .font(.headline)
+//                        .foregroundColor(.white)
+//                        .padding(10)
+//                        .background(.white.opacity(0.15))
+//                        .clipShape(Circle())
+//                        .accessibilityLabel("Share")
+//                }
+//            }
+//
+//            // Optional: focused score chip to keep context visible
+//            HStack() {
+//                Spacer()
+//                Text("\(selectedScore10())/10")
+//                    .font(.subheadline.monospacedDigit()).bold()
+//                    .foregroundColor(.white)
+//                    .padding(.horizontal, 10).padding(.vertical, 6)
+//                    .background(.white.opacity(0.15))
+//                    .clipShape(Capsule())
+//                Spacer()
+//            }
+//        }
+//        .padding(.horizontal)
+//        .padding(.top, 12)
+//        .padding(.bottom, 10)
+//        .background(
+//            ZStack {
+//                // Liquid glass blur base
+//                Rectangle().fill(.ultraThinMaterial)
+//                // Subtle color tint to keep brand/color context
+//                LinearGradient(
+//                    gradient: Gradient(colors: [selectedColor.opacity(0.25), selectedColor.opacity(0.15)]),
+//                    startPoint: .topLeading,
+//                    endPoint: .bottomTrailing
+//                )
+//            }
+//        )
+//        .clipShape(RoundedRectangle(cornerRadius: 40, style: .continuous))
+//        .overlay(
+//            RoundedRectangle(cornerRadius: 40, style: .continuous)
+//                .strokeBorder(Color.white.opacity(0.25), lineWidth: 1)
+//        )
+//        .ignoresSafeArea(edges: .top)
+//        .shadow(color: .black.opacity(0.15), radius: 8, y: 2)
+//    }
 
 
     // MARK: — Scores Row (Kids / Dogs / Cats)
