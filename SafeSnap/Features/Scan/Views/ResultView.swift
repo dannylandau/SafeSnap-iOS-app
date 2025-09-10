@@ -544,7 +544,6 @@ struct ResultView: View {
         items.append(summary)
 
         if let ui = vm.image { items.append(ui) }
-        if let url = exportCurrentResultAsJSON() { items.append(url) }
         sharePayload = SharePayload(items: items)
     }
 
