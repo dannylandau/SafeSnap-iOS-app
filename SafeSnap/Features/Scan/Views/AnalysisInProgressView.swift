@@ -121,12 +121,6 @@ struct AnalysisInProgressView: View {
                 .ignoresSafeArea()
             )
             .interactiveDismissDisabled(false)
-            .onDisappear {
-//                 If user swipes down to dismiss while work is ongoing, cancel as well
-                if coordinator.isComplete == false, coordinator.currentPhase != .preparing {
-                    viewModel.cancelScan()
-                }
-            }
         }
     }
     

@@ -30,6 +30,7 @@ final class GeminiService {
     private let model = "gemini-1.5-flash"
     private var currentTask: URLSessionDataTask?
     private let session = URLSession(configuration: .default)
+    private var wasCancelled = false
     
     private let apiKey: String
     
@@ -38,10 +39,13 @@ final class GeminiService {
     }
     
     func analyzeSafety(image: UIImage, options: SafetyOptions, streamToken: @escaping (String) -> Void) async throws -> SafetyAnalysisResponse {
+        wasCancelled = false
         streamToken("Analyzing with Gemini…")
+        if wasCancelled || Task.isCancelled { throw CancellationError() }
         let body = try makeRequestBody(image: image, options: options)
         let (data, response, taskRef) = try await makeNonStreamingRequest(body: body)
         self.currentTask = taskRef
+        if wasCancelled || Task.isCancelled { throw CancellationError() }
         guard let http = response as? HTTPURLResponse, (200..<300).contains(http.statusCode) else {
             throw URLError(.badServerResponse)
         }
@@ -72,6 +76,7 @@ final class GeminiService {
         
         if let finalData = sanitizedText.data(using: .utf8) {
             do {
+                if wasCancelled || Task.isCancelled { throw CancellationError() }
                 return try JSONDecoder().decode(SafetyAnalysisResponse.self, from: finalData)
             } catch {
                 // If likely truncation, retry once with higher token limit
@@ -88,6 +93,7 @@ final class GeminiService {
                           let retryFinal = retryText.data(using: .utf8) else {
                         throw NSError(domain: "GeminiService", code: -3, userInfo: [NSLocalizedDescriptionKey: "Gemini returned no JSON on retry"])
                     }
+                    if wasCancelled || Task.isCancelled { throw CancellationError() }
                     return try JSONDecoder().decode(SafetyAnalysisResponse.self, from: retryFinal)
                 }
                 throw error
@@ -98,6 +104,7 @@ final class GeminiService {
     }
     
     func cancelAnalysis() {
+        wasCancelled = true
         currentTask?.cancel()
         currentTask = nil
     }
@@ -189,10 +196,14 @@ final class GeminiService {
         req.setValue("application/json; charset=UTF-8", forHTTPHeaderField: "Content-Type")
 
         return try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<(Data, URLResponse, URLSessionDataTask), Error>) in
-            var task: URLSessionDataTask?
-            task = session.dataTask(with: req) { data, response, error in
+            var task: URLSessionDataTask!
+            task = session.dataTask(with: req) { [weak self] data, response, error in
+                defer { self?.currentTask = nil }
+                if let error = error as? URLError, error.code == .cancelled {
+                    return continuation.resume(throwing: CancellationError())
+                }
                 if let error = error { return continuation.resume(throwing: error) }
-                guard let data = data, let response = response, let task = task else {
+                guard let data = data, let response = response else {
                     return continuation.resume(throwing: URLError(.badServerResponse))
                 }
                 if let http = response as? HTTPURLResponse, !(200..<300).contains(http.statusCode) {
@@ -204,7 +215,12 @@ final class GeminiService {
                     continuation.resume(returning: (data, response, task))
                 }
             }
-            task?.resume()
+            self.currentTask = task
+            if self.wasCancelled {
+                task.cancel()
+            } else {
+                task.resume()
+            }
         }
     }
     
