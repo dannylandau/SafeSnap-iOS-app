@@ -28,6 +28,7 @@
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXFileReference section */
+		7D05B90E2E6EDEAD00419BBF /* SafeScan-Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = "SafeScan-Info.plist"; sourceTree = "<group>"; };
 		7DBA4AB02E0DEA1700CB1313 /* SafeScan.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = SafeScan.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		7DBA4ABD2E0DEA1800CB1313 /* SafeSnapTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = SafeSnapTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		7DBA4AC72E0DEA1800CB1313 /* SafeSnapUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = SafeSnapUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -104,6 +105,7 @@
 		7DBA4AA72E0DEA1700CB1313 = {
 			isa = PBXGroup;
 			children = (
+				7D05B90E2E6EDEAD00419BBF /* SafeScan-Info.plist */,
 				7DBA4AB22E0DEA1700CB1313 /* SafeSnap */,
 				7DBA4AC02E0DEA1800CB1313 /* SafeScanTests */,
 				7DBA4ACA2E0DEA1800CB1313 /* SafeScanUITests */,
@@ -430,12 +432,15 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				ASSETCATALOG_COMPILER_INCLUDE_ALL_APPICON_ASSETS = YES;
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 8;
+				CURRENT_PROJECT_VERSION = 10;
 				DEVELOPMENT_TEAM = H56SLCRAL5;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = "SafeScan-Info.plist";
+				INFOPLIST_KEY_ITSAppUsesNonExemptEncryption = NO;
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.lifestyle";
 				INFOPLIST_KEY_NSCameraUsageDescription = "This app uses the camera to scan products for safety analysis.";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
@@ -467,12 +472,15 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				ASSETCATALOG_COMPILER_INCLUDE_ALL_APPICON_ASSETS = YES;
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 8;
+				CURRENT_PROJECT_VERSION = 10;
 				DEVELOPMENT_TEAM = H56SLCRAL5;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = "SafeScan-Info.plist";
+				INFOPLIST_KEY_ITSAppUsesNonExemptEncryption = NO;
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.lifestyle";
 				INFOPLIST_KEY_NSCameraUsageDescription = "This app uses the camera to scan products for safety analysis.";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;

@@ -14,17 +14,18 @@ enum ScanHistoryBuilder {
     static func build(
         product: ProductIdentification,
         analysis: SafetyAnalysisResponse,
-        imageRef: URL?,
-        imageData: Data?,
+        // Input absolute URL; persisted as filename only (container-safe)
+        imageRef: URL,
+        imageData: Data,
         userToggles: ScanHistoryItem.UserToggles,
         visionContextRef: URL?,
         model: String = "gpt-4o",
         promptVersion: String = "v1",
         appVersion: String = (Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String) ?? "1.0"
     ) -> ScanHistoryItem {
-        let hash = imageData.map { sha256Hex($0) } ?? ""
+        let hash = sha256Hex(imageData)
         return ScanHistoryItem(
-            imageRef: imageRef,
+            imageFilename: imageRef.lastPathComponent,
             imageHash: hash,
             userToggles: userToggles,
             productName: analysis.productName,

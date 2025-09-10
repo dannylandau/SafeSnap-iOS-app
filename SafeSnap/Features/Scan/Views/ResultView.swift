@@ -9,27 +9,51 @@ import UIKit
 struct ResultView: View {
     @Environment(\.dismiss) private var dismiss
     @State private var sharePayload: SharePayload?
-    struct SharePayload: Identifiable { let id = UUID(); let items: [Any] }
-    let vm: RecognitionResultViewModel
+    @State private var headerHeight: CGFloat = 0
 
-    var body: some View {
-        ScrollView { content }
-            .sheet(item: $sharePayload) { payload in
-                ShareSheet(activityItems: payload.items)
-            }
+    struct SharePayload: Identifiable { let id = UUID(); let items: [Any] }
+
+    @ObservedObject var vm: RecognitionResultViewModel
+
+    // Measures the overlay header height so we can offset the scroll content
+    private struct HeaderHeightKey: PreferenceKey {
+        static var defaultValue: CGFloat = 0
+        static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) { value = nextValue() }
     }
 
-    // MARK: — Nav Bar
-    private var navBar: some View {
-        HStack {
-            Button { dismiss() } label: {
-                Label("Back", systemImage: "chevron.left")
-            }
-            .buttonStyle(.borderedProminent)
-            Spacer()
-            
+
+    var body: some View {
+        ScrollViewReader { proxy in
+            ScrollView { content }
+                .coordinateSpace(name: "scroll")
+                .safeAreaInset(edge: .top) {
+                    Color.clear.frame(height: headerHeight + 8) // offset *content* only; keeps blur visible
+                }
+                .onChange(of: vm.selectedSection) { _ in
+                    withAnimation(.easeInOut) {
+                        switch vm.selectedSection {
+                        case .children: proxy.scrollTo("childrenSection", anchor: .top)
+                        case .dogs:     proxy.scrollTo("dogsSection", anchor: .top)
+                        case .cats:     proxy.scrollTo("catsSection", anchor: .top)
+                        }
+                    }
+                }
         }
-        .padding()
+//        .overlay(alignment: .top) {
+//            overlayHeaderBar()
+//                .background(
+//                    GeometryReader { geo in
+//                        Color.clear.preference(key: HeaderHeightKey.self, value: geo.size.height)
+//                    }
+//                )
+//                .zIndex(1)
+//        }
+        .onPreferenceChange(HeaderHeightKey.self) { h in
+            headerHeight = h
+        }
+        .sheet(item: $sharePayload) { payload in
+            ShareSheet(activityItems: payload.items)
+        }
     }
 
     // MARK: — Content
@@ -40,8 +64,8 @@ struct ResultView: View {
             imageCard()
             headerBar()
             scoresRow()
-//            safetyBadge()
             kidSafetySection()
+                .id("childrenSection")
             if vm.includeCats || vm.includeDogs {
                 petSafetySection()
             }
@@ -61,16 +85,51 @@ struct ResultView: View {
         }
     }
 
+    // Resolves a stored file URL into the **current** app container if needed
+    private func resolveInCurrentContainer(_ url: URL?) -> URL? {
+        guard let url = url else { return nil }
+        if FileManager.default.fileExists(atPath: url.path) { return url }
+        // Container likely changed after reinstall; rebuild path using Documents/Images + filename
+        let filename = url.lastPathComponent
+        guard let docs = try? FileManager.default.url(for: .documentDirectory, in: .userDomainMask, appropriateFor: nil, create: false) else { return url }
+        let imagesDir = docs.appendingPathComponent("Images", isDirectory: true)
+        let candidate = imagesDir.appendingPathComponent(filename)
+        return FileManager.default.fileExists(atPath: candidate.path) ? candidate : url
+    }
+
+    // MARK: — Image Loading Helpers
+    private func thumbnailURL(for url: URL?) -> URL? {
+        guard let base = resolveInCurrentContainer(url) else { return nil }
+        let dir = base.deletingLastPathComponent()
+        let stem = base.deletingPathExtension().lastPathComponent
+        let thumbName = stem + "_thumb.jpg"
+        return dir.appendingPathComponent(thumbName)
+    }
+
+    private func loadImage(from url: URL?) -> UIImage? {
+        guard let url = resolveInCurrentContainer(url) else { return nil }
+        if let img = UIImage(contentsOfFile: url.path) { return img }
+        if let data = try? Data(contentsOf: url) { return UIImage(data: data) }
+        return nil
+    }
+
+    private var resolvedImage: UIImage? {
+        if let ui = vm.image { return ui }
+        let thumbURL = thumbnailURL(for: vm.imageRef)
+        if let img = loadImage(from: thumbURL) { return img }
+        return loadImage(from: vm.imageRef)
+    }
+
     // MARK: — Image Card
     private func imageCard() -> some View {
         Group {
-            if let ui = vm.image {
+            if let ui = resolvedImage {
                 ZStack(alignment: .topTrailing) {
                     Image(uiImage: ui)
                         .resizable().scaledToFill()
                         .frame(width: 200, height: 200)
                         .background(Color.secondary.opacity(0.1))
-                        .cornerRadius(12)
+                        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
                         .shadow(radius: 4)
                     Button { /* zoom */ } label: {
                         Image(systemName: "eye.fill")
@@ -81,6 +140,16 @@ struct ResultView: View {
                     }
                     .padding(6)
                 }
+            } else {
+                // Lightweight placeholder to keep layout stable
+                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                    .fill(Color.secondary.opacity(0.1))
+                    .frame(width: 200, height: 200)
+                    .overlay(
+                        Image(systemName: "photo")
+                            .font(.title)
+                            .foregroundStyle(.secondary)
+                    )
             }
         }
     }
@@ -91,6 +160,7 @@ struct ResultView: View {
         let title: String
         let score10: Int  // 0–10
         let labelPlacement: LabelPlacement
+        let onTap: (() -> Void)?
         private var progress: Double { min(1.0, max(0.0, Double(score10) / 10.0)) }
 
         var body: some View {
@@ -123,6 +193,10 @@ struct ResultView: View {
                     .accessibilityLabel(Text("\(title) safety score \(score10) out of 10"))
                 }
             }
+            .contentShape(Rectangle())
+            .onTapGesture {
+                onTap?()
+            }
         }
 
         private var ring: some View {
@@ -145,6 +219,17 @@ struct ResultView: View {
         }
     }
 
+    // MARK: — Selected Color Helpers
+    private func selectedScore10() -> Int {
+        let a = vm.analysis
+        switch vm.selectedSection {
+        case .children: return score10(fromHundred: a.childSafetyScore)
+        case .dogs:     return score10(fromHundred: a.dogSafetyScore ?? 0)
+        case .cats:     return score10(fromHundred: a.catSafetyScore ?? 0)
+        }
+    }
+    private var selectedColor: Color { scoreColor(selectedScore10()) }
+
     // MARK: — Header Bar
     private func headerBar() -> some View {
         HStack {
@@ -163,66 +248,134 @@ struct ResultView: View {
         .frame(maxWidth: .infinity)
         .background(
             LinearGradient(
-                gradient: Gradient(colors: [scoreColor(score10(fromHundred: vm.analysis.childSafetyScore)).opacity(0.8),
-                                             scoreColor(score10(fromHundred: vm.analysis.childSafetyScore))]),
+                gradient: Gradient(colors: [selectedColor.opacity(0.85), selectedColor]),
                 startPoint: .topLeading,
                 endPoint: .bottomTrailing
             )
         )
+        .animation(.easeInOut(duration: 0.25), value: vm.selectedSection)
         .cornerRadius(12)
         .padding(.horizontal)
     }
 
-    // MARK: — Scores Row (Kids / Dogs / Cats)
-    private func scoresRow() -> some View {
-        // Pull scores from the analysis (0–100) and convert to /10
-        let analysis = vm.analysis
-        let child10 = score10(fromHundred: analysis.childSafetyScore)
-        let dog10: Int? = analysis.dogSafetyScore.map { score10(fromHundred: $0) }
-        let cat10: Int? = analysis.catSafetyScore.map { score10(fromHundred: $0) }
+    // MARK: — Rigid Overlay Header
+    private func overlayHeaderBar() -> some View {
+        VStack(spacing: 8) {
+            HStack(alignment: .top, spacing: 12) {
+                // Back
+                Button { dismiss() } label: {
+                    Image(systemName: "chevron.left")
+                        .font(.headline)
+                        .foregroundColor(.white)
+                        .padding(10)
+                        .background(.white.opacity(0.15))
+                        .clipShape(Circle())
+                        .accessibilityLabel("Back")
+                }
 
-        // Show dog/cat rings if present in analysis OR toggled by the user
-        let showDog = vm.includeDogs
-        let showCat = vm.includeCats
+                // Title & Category — wrap fully, no truncation
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(vm.productName)
+                        .font(.title2.bold())
+                        .foregroundColor(.white)
+                        .fixedSize(horizontal: false, vertical: true) // allow multi-line
+                    Text(vm.category)
+                        .font(.title3)
+                        .foregroundColor(.white.opacity(0.9))
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                .padding(.top, 12)
 
-        // Build items tuple array (title, score)
-        var items: [(String, Int, ScoreRing.LabelPlacement)] = [("Kids", child10, .below)]
-        if showDog { items.append(("Dogs", dog10 ?? 0, .below)) }
-        if showCat { items.append(("Cats", cat10 ?? 0, .below)) }
+                Spacer(minLength: 8)
 
-        // With 2 items, place labels beside rings for a tighter layout
-        if items.count == 2 {
-            items = items.map { ($0.0, $0.1, .beside) }
-        }
+                // Share
+                Button { prepareShare() } label: {
+                    Image(systemName: "square.and.arrow.up")
+                        .font(.headline)
+                        .foregroundColor(.white)
+                        .padding(10)
+                        .background(.white.opacity(0.15))
+                        .clipShape(Circle())
+                        .accessibilityLabel("Share")
+                }
+            }
 
-        // Equal-width columns: each item takes the same horizontal space, centered.
-        return HStack(spacing: 0) {
-            ForEach(Array(items.enumerated()), id: \.offset) { _, item in
-                ScoreRing(title: item.0, score10: item.1, labelPlacement: item.2)
-                    .frame(maxWidth: .infinity, alignment: .center)
+            // Optional: focused score chip to keep context visible
+            HStack() {
+                Spacer()
+                Text("\(selectedScore10())/10")
+                    .font(.subheadline.monospacedDigit()).bold()
+                    .foregroundColor(.white)
+                    .padding(.horizontal, 10).padding(.vertical, 6)
+                    .background(.white.opacity(0.15))
+                    .clipShape(Capsule())
+                Spacer()
             }
         }
         .padding(.horizontal)
-        .padding(.bottom, 4)
+        .padding(.top, 12)
+        .padding(.bottom, 10)
+        .background(
+            ZStack {
+                // Liquid glass blur base
+                Rectangle().fill(.ultraThinMaterial)
+                // Subtle color tint to keep brand/color context
+                LinearGradient(
+                    gradient: Gradient(colors: [selectedColor.opacity(0.25), selectedColor.opacity(0.15)]),
+                    startPoint: .topLeading,
+                    endPoint: .bottomTrailing
+                )
+            }
+        )
+        .clipShape(RoundedRectangle(cornerRadius: 40, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: 40, style: .continuous)
+                .strokeBorder(Color.white.opacity(0.25), lineWidth: 1)
+        )
+        .ignoresSafeArea(edges: .top)
+        .shadow(color: .black.opacity(0.15), radius: 8, y: 2)
     }
 
-//    // MARK: — Safety Badge
-//    private func safetyBadge() -> some View {
-//        HStack {
-//            Image(systemName: "checkmark.circle.fill")
-//            Text(vm.safetyLabel)
-//        }
-//        .padding(.horizontal, 16)
-//        .padding(.vertical, 8)
-//        .background(Color.green.opacity(0.15))
-//        .foregroundColor(.green)
-//        .cornerRadius(12)
-//    }
+
+    // MARK: — Scores Row (Kids / Dogs / Cats)
+    private func scoresRow() -> some View {
+        let a = vm.analysis
+        let child10 = score10(fromHundred: a.childSafetyScore)
+        let dog10: Int? = a.dogSafetyScore.map { score10(fromHundred: $0) }
+        let cat10: Int? = a.catSafetyScore.map { score10(fromHundred: $0) }
+
+        let showDog = vm.includeDogs
+        let showCat = vm.includeCats
+        let hasMultiple = showDog || showCat
+
+        typealias SectionType = RecognitionResultViewModel.FocusSection
+        var items: [(String, Int, ScoreRing.LabelPlacement, SectionType)] = [("Kids", child10, .below, .children)]
+        if showDog { items.append(("Dogs", dog10 ?? 0, .below, .dogs)) }
+        if showCat { items.append(("Cats", cat10 ?? 0, .below, .cats)) }
+        if items.count == 2 { items = items.map { ($0.0, $0.1, .beside, $0.3) } }
+
+        return VStack(spacing: 20) {
+            if vm.includeDogs || vm.includeCats {
+                Text("Tip: tap a score ring to focus and jump to that section")
+                    .font(.caption2)
+                    .foregroundColor(.secondary)
+                    .padding(.top, 2)
+            }
+            HStack(spacing: 0) {
+                ForEach(Array(items.enumerated()), id: \.offset) { _, item in
+                    ScoreRing(title: item.0, score10: item.1, labelPlacement: item.2,
+                              onTap: hasMultiple ? { vm.selectedSection = item.3 } : nil)
+                    .frame(maxWidth: .infinity, alignment: .center)
+                }
+            }
+            .padding(.horizontal)
+            .padding(.bottom, 4)
+        }
+    }
 
     // MARK: — Pet Safety
     private func petSafetySection() -> some View {
         VStack(spacing: 8) {
-            // Header
             VStack(alignment: .center, spacing: 4) {
                 HStack {
                     Image(systemName: "pawprint.fill")
@@ -235,17 +388,16 @@ struct ResultView: View {
             .padding()
             .frame(maxWidth: .infinity)
             .background(Color.orange.opacity(0.1))
-            .cornerRadius(12)
+            .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
 
-            // Body
             VStack(alignment: .leading, spacing: 12) {
-                // Dogs
                 if vm.includeDogs {
                     petColumn(title: "Dogs", warnings: vm.dogWarnings)
+                        .id("dogsSection")
                 }
-                // Cats
                 if vm.includeCats {
                     petColumn(title: "Cats", warnings: vm.catWarnings)
+                        .id("catsSection")
                 }
             }
             .padding([.horizontal, .bottom])
@@ -254,7 +406,6 @@ struct ResultView: View {
     }
 
     /// Renders a list of pet warnings with a severity badge.
-    /// Expects `vm.dogWarnings` / `vm.catWarnings` to be `[(severity: String, warning: String, reason: String)]`.
     @ViewBuilder
     private func petColumn(title: String, warnings: [(severity: String, warning: String, reason: String)]) -> some View {
         VStack(alignment: .leading, spacing: 8) {
@@ -281,7 +432,7 @@ struct ResultView: View {
                     }
                     .padding(8)
                     .background(severityColor(item.severity).opacity(0.08))
-                    .cornerRadius(8)
+                    .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
                     .accessibilityElement(children: .combine)
                 }
             }
@@ -323,7 +474,7 @@ struct ResultView: View {
         .padding()
         .frame(maxWidth: .infinity)
         .background(Color.blue.opacity(0.1))
-        .cornerRadius(12)
+        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
     }
 
     private func kidSafetyList(title: String, items: [String], color: Color) -> some View {
@@ -337,7 +488,7 @@ struct ResultView: View {
                             .padding()
                             .frame(maxWidth: .infinity, alignment: .leading)
                             .background(color.opacity(0.1))
-                            .cornerRadius(8)
+                            .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
                     }
                 }
                 .padding(.top, 12)
@@ -352,17 +503,17 @@ struct ResultView: View {
                 Image(systemName: "globe")
                 Text("Data Sources").font(.headline)
             }
-            
+
             ForEach(vm.dataSources, id: \.self) { source in
                 Text(source)
                     .padding(10)
                     .background(Color.secondary.opacity(0.1))
-                    .cornerRadius(8)
+                    .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
             }
         }
         .padding()
         .background(Color.secondary.opacity(0.1))
-        .cornerRadius(12)
+        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
         .padding(.horizontal)
     }
 
@@ -381,15 +532,19 @@ struct ResultView: View {
     // MARK: — Share helpers
     private func prepareShare() {
         var items: [Any] = []
-
-        let child10 = score10(fromHundred: vm.analysis.childSafetyScore)
-        let summary = "SafeSnap — \(vm.productName) (\(vm.category)) — Safety: \(child10)/10 (Kids)"
+        let selected10 = score10(fromHundred: vm.overallScoreHundred)
+        let focusLabel: String = {
+            switch vm.selectedSection {
+            case .children: return "Kids"
+            case .dogs:     return "Dogs"
+            case .cats:     return "Cats"
+            }
+        }()
+        let summary = "SafeSnap — \(vm.productName) (\(vm.category)) — Safety: \(selected10)/10 (\(focusLabel))"
         items.append(summary)
 
         if let ui = vm.image { items.append(ui) }
         if let url = exportCurrentResultAsJSON() { items.append(url) }
-
-        // Present only when we actually have something
         sharePayload = SharePayload(items: items)
     }
 
@@ -404,7 +559,7 @@ struct ResultView: View {
         let payload = Payload(
             productName: vm.productName,
             category: vm.category,
-            score: vm.score,
+            score: score10(fromHundred: vm.overallScoreHundred),
             date: vm.date,
             analysis: vm.analysis
         )
@@ -475,51 +630,3 @@ fileprivate func score10(fromHundred value: Int) -> Int {
     let clamped = max(0, min(100, value))
     return Int(round(Double(clamped) / 10.0))
 }
-
-// TODO: Fix the preview once the Product model is defined
-//// MARK: — ResultView Previews
-//struct ResultView_Previews: PreviewProvider {
-//    /// A sample Product matching your model
-//    static var sampleProduct: Product {
-//        Product(
-//            id: UUID().uuidString,
-//            name: "Red Apple",
-//            productType: "Food",
-//            safetyScore: 9,
-//            safetyLevel: "Perfectly Safe",
-//            pros: [
-//                SafetyPoint(id: "1", label: "No allergens", severity: "low", category: "Regulatory")
-//            ],
-//            cons: [
-//                SafetyPoint(id: "2", label: "Wash before use", severity: "medium", category: "Hygiene")
-//            ],
-//            certifications: ["FDA Approved", "Consumer Product Safety Commission", "International Safety Standards"],
-//            hygieneWarnings: [
-//                HygieneWarning(type: "Wash", message: "Rinse under cold water before eating")
-//            ]
-//        )
-//    }
-//
-//    static var previews: some View {
-//        // Build the RecognitionResultViewModel from that product
-//        let vm = RecognitionResultViewModel(
-//            image: UIImage(systemName: "applelogo"),
-//            productName: sampleProduct.name,
-//            category: sampleProduct.productType,
-//            score: sampleProduct.safetyScore,
-//            safetyLabel: sampleProduct.safetyLevel,
-//            safeBenefits: sampleProduct.pros.map(\.label),
-//            safetyConcerns: sampleProduct.cons.map(\.label),
-//            dataSources: sampleProduct.certifications,
-//            date: Date()
-//        )
-//
-//        Group {
-//            ResultView(vm: vm)
-//                .previewDisplayName("Light Mode")
-//            ResultView(vm: vm)
-//                .preferredColorScheme(.dark)
-//                .previewDisplayName("Dark Mode")
-//        }
-//    }
-//}

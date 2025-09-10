@@ -5,11 +5,85 @@
 //  Created by Marcin Grześkowiak on 23/07/2025.
 //
 
-
 import Foundation
 import SwiftUI
 import CoreGraphics
 import UIKit
+
+private enum ImageFormat: String { case jpg, png }
+
+private struct ImageStoreResult {
+    let full: URL
+    let thumb: URL
+    let pixelSize: CGSize
+    let format: ImageFormat
+}
+
+private actor ImageStore {
+    private let fm = FileManager.default
+
+    func persist(image: UIImage, data: Data?) async throws -> ImageStoreResult {
+        let docs = try fm.url(for: .documentDirectory, in: .userDomainMask, appropriateFor: nil, create: true)
+        let imagesDir = docs.appendingPathComponent("Images", isDirectory: true)
+        if !fm.fileExists(atPath: imagesDir.path) {
+            try fm.createDirectory(at: imagesDir, withIntermediateDirectories: true)
+        }
+
+        let id = UUID().uuidString
+        // Decide format based on provided data header if possible
+        var format: ImageFormat = .jpg
+        if let d = data, d.count >= 4 {
+            let hdr = [UInt8](d.prefix(4))
+            if hdr[0] == 0x89 && hdr[1] == 0x50 && hdr[2] == 0x4E && hdr[3] == 0x47 { format = .png }
+            else if hdr[0] == 0xFF && hdr[1] == 0xD8 && hdr[2] == 0xFF { format = .jpg }
+        }
+
+        let fullURL: URL
+        if let d = data, !d.isEmpty {
+            // Write the original bytes as-is
+            fullURL = imagesDir.appendingPathComponent("IMG_\(id).\(format.rawValue)")
+            try d.write(to: fullURL, options: .atomic)
+        } else {
+            // Encode once (fallback)
+            let jpgURL = imagesDir.appendingPathComponent("IMG_\(id).jpg")
+            guard let jpg = image.jpegData(compressionQuality: 0.9) else {
+                throw NSError(domain: "SafeSnap", code: -11, userInfo: [NSLocalizedDescriptionKey: "Unable to encode image to JPEG"])
+            }
+            try jpg.write(to: jpgURL, options: .atomic)
+            format = .jpg
+            fullURL = jpgURL
+        }
+
+        // Validate readability
+        guard UIImage(contentsOfFile: fullURL.path) != nil else {
+            throw NSError(domain: "SafeSnap", code: -12, userInfo: [NSLocalizedDescriptionKey: "Written image is unreadable at \(fullURL.lastPathComponent)"])
+        }
+
+        // Compute pixel size from the original image
+        let pixelSize = CGSize(width: Int(image.size.width * image.scale), height: Int(image.size.height * image.scale))
+
+        // Generate thumbnail (~600px longest edge)
+        let thumbURL = imagesDir.appendingPathComponent("IMG_\(id)_thumb.jpg")
+        let thumb = try await makeThumbnail(from: image, maxEdge: 600)
+        guard let thumbData = thumb.jpegData(compressionQuality: 0.8) else {
+            throw NSError(domain: "SafeSnap", code: -13, userInfo: [NSLocalizedDescriptionKey: "Unable to encode thumbnail jpeg"])
+        }
+        try thumbData.write(to: thumbURL, options: .atomic)
+
+        return ImageStoreResult(full: fullURL, thumb: thumbURL, pixelSize: pixelSize, format: format)
+    }
+
+    private func makeThumbnail(from image: UIImage, maxEdge: CGFloat) async throws -> UIImage {
+        let size = image.size
+        let scale = min(1, maxEdge / max(size.width, size.height))
+        let target = CGSize(width: floor(size.width * scale), height: floor(size.height * scale))
+        let renderer = UIGraphicsImageRenderer(size: target)
+        let out = renderer.image { _ in
+            image.draw(in: CGRect(origin: .zero, size: target))
+        }
+        return out
+    }
+}
 
 enum ScanError: Identifiable, LocalizedError {
     case openAIFailed(reason: String, underlying: Error? = nil)
@@ -89,6 +163,7 @@ final class ScanAnalysisCoordinator: ObservableObject {
 
     private let geminiService: GeminiService
     private let historyService: ScanHistoryService
+    private let imageStore = ImageStore()
 
     private var safetyAnalysis: SafetyAnalysisResponse?
     private var thumbnail: UIImage?
@@ -127,7 +202,9 @@ final class ScanAnalysisCoordinator: ObservableObject {
                     includeChildren: true
                 )
 
-                let imageURL = try? self.persistScanImage(imageData)
+                let storeResult = try await imageStore.persist(image: image, data: imageData)
+                let imageURL = storeResult.full
+                // Persisted image at: \(imageURL.lastPathComponent), thumb: \(storeResult.thumb.lastPathComponent) size: \(Int(storeResult.pixelSize.width))x\(Int(storeResult.pixelSize.height))
 
                 // Build a minimal ProductIdentification from Gemini result
                 let product = ProductIdentification(
@@ -162,40 +239,6 @@ final class ScanAnalysisCoordinator: ObservableObject {
     func cancelAnalysis() {
         geminiService.cancelAnalysis()
         currentPhase = .preparing
-    }
-
-    private func persistScanImage(_ data: Data) throws -> URL {
-        let fm = FileManager.default
-        let docs = try fm.url(for: .documentDirectory, in: .userDomainMask, appropriateFor: nil, create: true)
-        let imagesDir = docs.appendingPathComponent("Images", isDirectory: true)
-        if !fm.fileExists(atPath: imagesDir.path) {
-            try fm.createDirectory(at: imagesDir, withIntermediateDirectories: true)
-        }
-
-        // Decode input bytes -> UIImage
-        guard let uiImage = UIImage(data: data) else {
-            throw NSError(domain: "SafeSnap", code: -10,
-                          userInfo: [NSLocalizedDescriptionKey: "Persist image: input data is not a valid image"])
-        }
-
-        // Prefer JPEG, fallback to PNG
-        let jpegURL = imagesDir.appendingPathComponent(UUID().uuidString + ".jpg")
-        if let jpeg = uiImage.jpegData(compressionQuality: 0.9) {
-            try jpeg.write(to: jpegURL, options: .atomic)
-            // Validate readable
-            if UIImage(contentsOfFile: jpegURL.path) != nil { return jpegURL }
-        }
-
-        let pngURL = imagesDir.appendingPathComponent(UUID().uuidString + ".png")
-        if let png = uiImage.pngData() {
-            try png.write(to: pngURL, options: .atomic)
-            if UIImage(contentsOfFile: pngURL.path) != nil { return pngURL }
-        }
-
-        // Last resort: write raw bytes with a neutral extension
-        let rawURL = imagesDir.appendingPathComponent(UUID().uuidString + ".img")
-        try data.write(to: rawURL, options: .atomic)
-        return rawURL
     }
     
 }
