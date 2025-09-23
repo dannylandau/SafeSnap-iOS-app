@@ -175,6 +175,7 @@ final class ScanAnalysisCoordinator: ObservableObject {
     private var includeChildren: Bool = false
     
     @Published var latestHistoryItem: ScanHistoryItem?
+    @Published var explainability: AnalysisExtras? = nil
     
     init(geminiService: GeminiService, historyService: ScanHistoryService) {
         self.geminiService = geminiService
@@ -184,13 +185,18 @@ final class ScanAnalysisCoordinator: ObservableObject {
     @MainActor
     func startGeminiScan(image: UIImage, options: SafetyOptions) async throws {
         currentPhase = .openAI
-        let result = try await geminiService.analyzeSafety(
+        let analyzed = try await geminiService.analyzeSafetyWithExtras(
             image: image,
             options: options,
             streamToken: { [weak self] _ in
                 Task { @MainActor in self?.partial = "Analyzing…" }
-            }
+            },
+            visionLabels: [],
+            ocrHits: []
         )
+        let result = analyzed.response
+        self.explainability = analyzed.extras
+        
         // Persist image and build history item
         let imageData: Data = image.jpegData(compressionQuality: 0.9) ?? Data()
         self.safetyAnalysis = result
@@ -206,14 +212,15 @@ final class ScanAnalysisCoordinator: ObservableObject {
         let imageURL = storeResult.full
         // Persisted image at: \(imageURL.lastPathComponent), thumb: \(storeResult.thumb.lastPathComponent) size: \(Int(storeResult.pixelSize.width))x\(Int(storeResult.pixelSize.height))
         
-        // Build a minimal ProductIdentification from Gemini result
+        // Prefer canonical category from policy extras if available
+        let canonicalType = analyzed.extras.policy.canonicalCategory ?? result.productType
         let product = ProductIdentification(
-            productType: result.productType,
+            productType: canonicalType,
             productName: result.productName,
             brandCandidates: [],
-            labels: [],
+            labels: analyzed.extras.evidence.labels,
             objects: [],
-            detectedText: nil,
+            detectedText: analyzed.extras.evidence.ocrHits.isEmpty ? nil : analyzed.extras.evidence.ocrHits.joined(separator: ", "),
             confidence: result.recognitionConfidence
         )
         

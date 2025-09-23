@@ -62,6 +62,11 @@ final class RecognitionResultViewModel: ObservableObject, Identifiable {
         analysis.petSafety.cats.map { ($0.severity.rawValue, $0.warning, $0.reason) }
     }
 
+    // Explainability (UI-only; not persisted in schema)
+    @Published var canonicalCategory: String?
+    @Published var rulesTriggered: [String] = []
+    @Published var evidence: SafetyEvidence = .init(labels: [], ocrHits: [])
+
     // MARK: — Scores
     /// The overall score (0–100) to display, driven by the user's selected focus.
     var overallScoreHundred: Int {
@@ -90,7 +95,10 @@ final class RecognitionResultViewModel: ObservableObject, Identifiable {
         analysis: SafetyAnalysisResponse,
         includeDogs: Bool,
         includeCats: Bool,
-        imageFilename: String? = nil
+        imageFilename: String? = nil,
+        canonicalCategory: String? = nil,
+        rulesTriggered: [String] = [],
+        evidence: SafetyEvidence = .init(labels: [], ocrHits: [])
     ) {
         self.image = image
         self.productName = productName
@@ -100,6 +108,9 @@ final class RecognitionResultViewModel: ObservableObject, Identifiable {
         self.includeDogs = includeDogs
         self.includeCats = includeCats
         self.imageFilename = imageFilename
+        self.canonicalCategory = canonicalCategory
+        self.rulesTriggered = rulesTriggered
+        self.evidence = evidence
 
         // Build a stable per-analysis key without mutating the server schema.
         self.selectionKey = Self.makeSelectionKey(for: analysis)
@@ -107,6 +118,12 @@ final class RecognitionResultViewModel: ObservableObject, Identifiable {
            let persisted = FocusSection(rawValue: raw) {
             self.selectedSection = persisted
         }
+    }
+
+    func applyExplainability(_ extras: AnalysisExtras) {
+        self.canonicalCategory = extras.policy.canonicalCategory
+        self.rulesTriggered = extras.policy.rulesTriggered
+        self.evidence = extras.evidence
     }
 }
 
