@@ -95,6 +95,7 @@ final class ScanViewModel: ObservableObject {
         }
     }
 
+    @MainActor
     private func showLowRecognitionRetakeAlert() {
         let tips = """
         Can't recognize the product clearly.
@@ -106,14 +107,18 @@ final class ScanViewModel: ObservableObject {
         """
         // Show alert with a Retake primary action (reset to idle so the user can reshoot)
         alerts.show(
-            AppAlert(
-                title: "Need a clearer photo",
-                message: tips,
-                primaryButton: .default(Text("Retake"), action: { [weak self] in
-                    self?.cancelScan()
-                }),
-                secondaryButton: .cancel(Text("Dismiss"))
-            )
+            AppAlert(title: "Need a clearer photo",
+                     message: tips,
+                     actions: [
+                        .init(title: "Retake",
+                              role: .normal,
+                              perform: { [weak self] in
+                                  self?.cancelScan()
+                              }),
+                        .init(title: "Dismiss",
+                              role: .cancel,
+                              perform: {})
+                     ])
         )
     }
 
