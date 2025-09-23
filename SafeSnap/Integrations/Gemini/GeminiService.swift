@@ -129,6 +129,13 @@ final class GeminiService {
                 return "Do not include pet-specific analysis. Set dogSafetyScore and catSafetyScore to null. Set petSafety.dogs and petSafety.cats to empty arrays []."
             }
         }()
+        let childDirective: String = """
+        Evaluate SAFETY FOR CHILDREN ONLY (infants, toddlers, and school‑age kids). Ignore adult tolerances.
+        - All scores must reflect risk to children, not adults. In particular, set `overallSafetyScore` to the child safety perspective (it should mirror or be derived from `childSafetyScore`).
+        - Prioritize pediatric risks: choking hazards (small parts, hard candies, whole nuts, coins, button batteries), toxicity (alcohol, caffeine, nicotine, xylitol, essential oils, household chemicals), high sugar/sodium, raw/unpasteurized items, known pediatric allergens, sharp edges, magnets, and temperature/burn risks.
+        - If the item is an adult‑only product (e.g., alcoholic beverage, adult supplements/medications), return a very low `childSafetyScore` (≤ 2/10) with explicit warnings and set `overallSafetyScore` accordingly.
+        - Do NOT include guidance framed for adults; all advice must be child‑focused.
+        """
         let specificityDirective: String = """
         Be maximally specific when naming the product. If it's a mushroom, identify the species (e.g., 'shiitake', 'chanterelle'); if it's a plant/fruit/vegetable/herb/spice or any item with varieties, name the exact type/variety where possible (e.g., 'Gala apple', 'Roma tomato', 'curly parsley'). Use context from the image (shape, color, texture, packaging text) to disambiguate. Score safety for the specific type you identify. If two types are plausible, pick the most likely and reflect uncertainty via recognitionConfidence and modelConfidence. Do NOT invent fields outside the schema.
         """
@@ -148,8 +155,9 @@ final class GeminiService {
         let bodyDict: [String: Any] = [
             "systemInstruction": [
                 "parts": [
-                    ["text": "You are a product safety analyst. Return JSON only that matches the provided schema."],
+                    ["text": "You are a product safety analyst for CHILD SAFETY. Return JSON only that matches the provided schema."],
                     ["text": petDirective],
+                    ["text": childDirective],
                     ["text": ocrDirective],
                     ["text": specificityDirective],
                     ["text": "Examples: 1) Image shows brown gills, convex cap with white stem → 'Mushroom — shiitake'. 2) Small red apple with yellow streaks, label 'Gala' visible → 'Apple — Gala'. 3) Long plum tomato on vine → 'Tomato — Roma'."],
@@ -159,7 +167,7 @@ final class GeminiService {
                 "role": "user",
                 "parts": [
                     ["inline_data": ["mime_type": "image/jpeg", "data": base64Image]],
-                    ["text": "Use integers 0-100 for scores, modelConfidence 0.0-1.0. Use nulls or empty arrays when unknown.\n\nOCR: Read any visible label/packaging text from the image and use it to decide the exact product/variety. Do not print OCR text; return JSON only.\n\nPet rules: \(petDirective)\n\nSpecificity: \(specificityDirective)\nAvoid generic names like 'mushroom', 'apple', 'lettuce' unless recognitionConfidence < 0.5." ]
+                    ["text": "Use integers 0-100 for scores, modelConfidence 0.0-1.0. Use nulls or empty arrays when unknown.\n\nOCR: Read any visible label/packaging text from the image and use it to decide the exact product/variety. Do not print OCR text; return JSON only.\n\nPet rules: \(petDirective)\nKid focus: \(childDirective)\n\nSpecificity: \(specificityDirective)\nAvoid generic names like 'mushroom', 'apple', 'lettuce' unless recognitionConfidence < 0.5." ]
                 ]
             ]],
             "generationConfig": generationConfig
