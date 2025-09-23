@@ -85,6 +85,10 @@ struct ResultView: View {
             if vm.includeCats || vm.includeDogs {
                 petSafetySection()
             }
+            // Insert explainability section here if needed
+            if hasExplainability {
+                explainabilitySection()
+            }
             dataSourcesSection()
             timestampFooter()
         }
@@ -137,6 +141,15 @@ struct ResultView: View {
         let thumbURL = thumbnailURL(for: vm.imageRef)
         if let img = loadImage(from: thumbURL) { return img }
         return loadImage(from: vm.imageRef)
+    }
+
+    // Helper to determine if explainability section should be shown
+    private var hasExplainability: Bool {
+        let hasCategory = (vm.canonicalCategory?.isEmpty == false)
+        let hasRules = !vm.rulesTriggered.isEmpty
+        let hasLabels = !vm.evidence.labels.isEmpty
+        let hasOCR = !vm.evidence.ocrHits.isEmpty
+        return hasCategory || hasRules || hasLabels || hasOCR
     }
 
     // MARK: — Image Card
@@ -437,6 +450,68 @@ struct ResultView: View {
                 .padding(.top, 12)
             }
         }
+    }
+
+    // MARK: — Explainability
+    @ViewBuilder
+    private func explainabilitySection() -> some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack {
+                Image(systemName: "questionmark.circle.fill")
+                Text("Why this score?").font(.headline)
+            }
+            .padding(.bottom, 2)
+
+            if let cat = vm.canonicalCategory, !cat.isEmpty {
+                HStack {
+                    Text("Canonical category")
+                        .font(.subheadline).fontWeight(.semibold)
+                    Spacer()
+                    Text(cat)
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                }
+                .accessibilityElement(children: .combine)
+            }
+
+            if !vm.rulesTriggered.isEmpty {
+                VStack(alignment: .leading, spacing: 6) {
+                    Text("Rules triggered")
+                        .font(.subheadline).fontWeight(.semibold)
+                    ForEach(vm.rulesTriggered, id: \.self) { rule in
+                        Text("• \(rule)")
+                            .font(.footnote)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+            }
+
+            if !vm.evidence.labels.isEmpty {
+                VStack(alignment: .leading, spacing: 6) {
+                    Text("Vision labels")
+                        .font(.subheadline).fontWeight(.semibold)
+                    Text(vm.evidence.labels.joined(separator: ", "))
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                        .textSelection(.enabled)
+                }
+            }
+
+            if !vm.evidence.ocrHits.isEmpty {
+                VStack(alignment: .leading, spacing: 6) {
+                    Text("OCR")
+                        .font(.subheadline).fontWeight(.semibold)
+                    Text(vm.evidence.ocrHits.joined(separator: ", "))
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                        .textSelection(.enabled)
+                }
+            }
+        }
+        .padding()
+        .background(Color.secondary.opacity(0.1))
+        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+        .padding(.horizontal)
     }
 
     // MARK: — Data Sources
