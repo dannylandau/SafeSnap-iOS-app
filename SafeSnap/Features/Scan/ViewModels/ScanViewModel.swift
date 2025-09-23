@@ -56,6 +56,15 @@ final class ScanViewModel: ObservableObject {
                     self.phase = .idle
                 }
             } catch let error as ScanError {
+                if error.localizedDescription.contains("Recognition confidence too low") {
+                    await MainActor.run {
+                        self.phase = .idle
+                        self.resultVM = nil
+                        self.scanError = nil
+                        self.showLowRecognitionRetakeAlert()
+                    }
+                    return
+                }
                 await MainActor.run {
                     self.phase = .error
                     self.scanError = error
@@ -65,6 +74,15 @@ final class ScanViewModel: ObservableObject {
                     }))
                 }
             } catch {
+                if error.localizedDescription.contains("Recognition confidence too low") {
+                    await MainActor.run {
+                        self.phase = .idle
+                        self.resultVM = nil
+                        self.scanError = nil
+                        self.showLowRecognitionRetakeAlert()
+                    }
+                    return
+                }
                 await MainActor.run {
                     self.phase = .error
                     self.scanError = .openAIFailed(reason: error.localizedDescription)
@@ -75,6 +93,28 @@ final class ScanViewModel: ObservableObject {
                 }
             }
         }
+    }
+
+    private func showLowRecognitionRetakeAlert() {
+        let tips = """
+        Can't recognize the product clearly.
+
+        Try:
+        • Scan the product label
+        • Center the object
+        • Photograph the front of the package
+        """
+        // Show alert with a Retake primary action (reset to idle so the user can reshoot)
+        alerts.show(
+            AppAlert(
+                title: "Need a clearer photo",
+                message: tips,
+                primaryButton: .default(Text("Retake"), action: { [weak self] in
+                    self?.cancelScan()
+                }),
+                secondaryButton: .cancel(Text("Dismiss"))
+            )
+        )
     }
 
     func retryLastScan() {
