@@ -7,6 +7,7 @@
 
 import Foundation
 import UIKit
+import CryptoKit
 
 private struct GoogleAPIErrorEnvelope: Decodable {
     struct Inner: Decodable {
@@ -28,6 +29,114 @@ private func decodeGoogleError(from data: Data) -> String? {
 
 final class GeminiService {
     private let model = "gemini-1.5-flash"
+    // Determinism & reliability
+    private let reliabilityRuns = 3
+    private let recognitionGateThreshold: Double = 0.85 // gate low-confidence recognitions
+    // Simple in-memory cache to keep repeated scans stable within a session
+    private var resultCache: [String: SafetyAnalysisResponse] = [:]
+
+    enum GeminiServiceError: LocalizedError {
+        case lowRecognitionConfidence(Double)
+        case emptyAIResponse
+        case normalizationFailed
+        case cancelled
+        
+        var errorDescription: String? {
+            switch self {
+            case .lowRecognitionConfidence(let c): return "Recognition confidence too low (\(Int(c * 100))%). Please retake the photo (center the product, show the front label)."
+            case .emptyAIResponse: return "Gemini returned no JSON text."
+            case .normalizationFailed: return "Unable to confidently map the product to a canonical safety category."
+            case .cancelled: return "Analysis was cancelled."
+            }
+        }
+    }
+    
+    /// Hash the image so repeated scans yield cached, consistent results.
+    private func cacheKey(for imageData: Data, options: SafetyOptions) -> String {
+        var hasher = SHA256()
+        hasher.update(data: imageData)
+        // include toggles in the key
+        let toggles = "\(options.includeDogs)-\(options.includeCats)".data(using: .utf8)!
+        hasher.update(data: toggles)
+        let digest = hasher.finalize()
+        return digest.map { String(format: "%02x", $0) }.joined()
+    }
+    
+    /// Very small taxonomy/normalization layer. Extend as needed.
+    private func canonicalCategory(from name: String?, type: String?) -> String? {
+        let tokens = ([(name ?? ""), (type ?? "")]
+            .joined(separator: " ")
+            .lowercased())
+        // Alcohol
+        let alcoholHints = ["beer","lager","ale","ipa","stout","porter","wine","vodka","whisky","whiskey","rum","gin","tequila","cider","alcohol","alc.","tallboy"]
+        if alcoholHints.contains(where: { tokens.contains($0) }) {
+            return "alcohol"
+        }
+        // Tobacco / nicotine
+        let tobaccoHints = ["cigarette","tobacco","nicotine","vape","snus","e-cig","e‑cig","e cig"]
+        if tobaccoHints.contains(where: { tokens.contains($0) }) {
+            return "tobacco_nicotine"
+        }
+        // Button batteries / magnets
+        let batteryHints = ["button battery","coin cell","cr2032","lr44","battery"]
+        if batteryHints.contains(where: { tokens.contains($0) }) {
+            return "button_battery"
+        }
+        // Household hazards
+        let detergentHints = ["detergent","pods","laundry pod","bleach","cleaner","ammonia"]
+        if detergentHints.contains(where: { tokens.contains($0) }) {
+            return "household_chemical"
+        }
+        // Caffeine/energy
+        let caffeineHints = ["energy drink","caffeine","espresso","coffee shot","yerba mate","guarana"]
+        if caffeineHints.contains(where: { tokens.contains($0) }) {
+            return "caffeine"
+        }
+        // High choking risk
+        let chokingHints = ["whole nut","peanut","almond","hazelnut","grape","hot dog","marble"]
+        if chokingHints.contains(where: { tokens.contains($0) }) {
+            return "choking_hazard"
+        }
+        // Strong magnets
+        let magnetHints = ["neodymium","rare earth magnet","buckyballs","magnet sphere"]
+        if magnetHints.contains(where: { tokens.contains($0) }) { return "strong_magnet" }
+        return nil
+    }
+    
+    /// Apply hard guardrails & child-first policy on top of model output.
+    private func applyPolicyOverrides(_ r: inout SafetyAnalysisResponse, options: SafetyOptions) {
+        let cat = canonicalCategory(from: r.productName, type: r.productType)
+        
+        if cat == "alcohol" {
+            // Near-zero for children & pets regardless of AI text
+            r.childSafetyScore = min(r.childSafetyScore, 1)
+            r.overallSafetyScore = min(r.overallSafetyScore, 1)
+            if options.includeDogs { r.dogSafetyScore = (r.dogSafetyScore ?? 1) > 1 ? 1 : r.dogSafetyScore }
+            if options.includeCats { r.catSafetyScore = (r.catSafetyScore ?? 1) > 1 ? 1 : r.catSafetyScore }
+        } else if cat == "tobacco_nicotine" {
+            r.childSafetyScore = min(r.childSafetyScore, 1)
+            r.overallSafetyScore = min(r.overallSafetyScore, 1)
+        } else if cat == "button_battery" {
+            r.childSafetyScore = min(r.childSafetyScore, 1)
+            r.overallSafetyScore = min(r.overallSafetyScore, 1)
+        } else if cat == "household_chemical" || cat == "caffeine" || cat == "strong_magnet" {
+            r.childSafetyScore = min(r.childSafetyScore, 2)
+            r.overallSafetyScore = min(r.overallSafetyScore, r.childSafetyScore)
+        } else if cat == "choking_hazard" {
+            r.childSafetyScore = min(r.childSafetyScore, 2)
+            r.overallSafetyScore = min(r.overallSafetyScore, r.childSafetyScore)
+        }
+        
+        // Ensure overall mirrors child perspective
+        r.overallSafetyScore = min(r.overallSafetyScore, r.childSafetyScore)
+    }
+    
+    private func median(_ values: [Int]) -> Int {
+        guard !values.isEmpty else { return 0 }
+        let sorted = values.sorted()
+        return sorted[sorted.count / 2]
+    }
+
     private var currentTask: URLSessionDataTask?
     private let session = URLSession(configuration: .default)
     private var wasCancelled = false
@@ -41,6 +150,15 @@ final class GeminiService {
     func analyzeSafety(image: UIImage, options: SafetyOptions, streamToken: @escaping (String) -> Void) async throws -> SafetyAnalysisResponse {
         wasCancelled = false
         streamToken("Analyzing with Gemini…")
+        // Encode once up front for cache key & payload
+        guard let imageData = image.jpegData(compressionQuality: 0.9) else {
+            throw NSError(domain: "GeminiService", code: -1, userInfo: [NSLocalizedDescriptionKey: "Unable to encode image"])
+        }
+        let key = cacheKey(for: imageData, options: options)
+        if let cached = resultCache[key] {
+            streamToken("Using cached result for consistency.")
+            return cached
+        }
         if wasCancelled || Task.isCancelled { throw CancellationError() }
         let body = try makeRequestBody(image: image, options: options)
         let (data, response, taskRef) = try await makeNonStreamingRequest(body: body)
@@ -74,33 +192,70 @@ final class GeminiService {
             return t
         }()
         
-        if let finalData = sanitizedText.data(using: .utf8) {
-            do {
-                if wasCancelled || Task.isCancelled { throw CancellationError() }
-                return try JSONDecoder().decode(SafetyAnalysisResponse.self, from: finalData)
-            } catch {
-                // If likely truncation, retry once with higher token limit
-                if sanitizedText.count > 0 {
-                    streamToken("Retrying with larger token limit…")
-                    let retryBody = try makeRequestBody(image: image, options: options, maxTokensOverride: 768)
-                    let (retryData, retryResponse, retryTask) = try await makeNonStreamingRequest(body: retryBody)
-                    self.currentTask = retryTask
-                    guard let http2 = retryResponse as? HTTPURLResponse, (200..<300).contains(http2.statusCode) else {
-                        throw URLError(.badServerResponse)
-                    }
-                    let retryApi = try JSONDecoder().decode(GenerateContentResponse.self, from: retryData)
-                    guard let retryText = retryApi.candidates?.first?.content.parts.first?.text,
-                          let retryFinal = retryText.data(using: .utf8) else {
-                        throw NSError(domain: "GeminiService", code: -3, userInfo: [NSLocalizedDescriptionKey: "Gemini returned no JSON on retry"])
-                    }
-                    if wasCancelled || Task.isCancelled { throw CancellationError() }
-                    return try JSONDecoder().decode(SafetyAnalysisResponse.self, from: retryFinal)
-                }
-                throw error
-            }
-        } else {
+        guard let initialData = sanitizedText.data(using: .utf8) else {
             throw NSError(domain: "GeminiService", code: -4, userInfo: [NSLocalizedDescriptionKey: "Unable to encode Gemini text as UTF-8"])
         }
+        
+        // Deterministic multi-run aggregation (median to avoid outliers)
+        func decodeRun(_ data: Data) throws -> SafetyAnalysisResponse {
+            return try JSONDecoder().decode(SafetyAnalysisResponse.self, from: data)
+        }
+        
+        var runs: [SafetyAnalysisResponse] = []
+        do {
+            if wasCancelled || Task.isCancelled { throw CancellationError() }
+            runs.append(try decodeRun(initialData))
+        } catch {
+            // fall through to retry path below
+        }
+        
+        // If first run failed or looks incomplete, retry with larger token limit and then do extra runs
+        while runs.count < reliabilityRuns {
+            if wasCancelled || Task.isCancelled { throw CancellationError() }
+            streamToken("Ensuring consistency… (\(runs.count + 1)/\(reliabilityRuns))")
+            let retryBody = try makeRequestBody(image: image, options: options, maxTokensOverride: 768)
+            let (retryData, retryResponse, retryTask) = try await makeNonStreamingRequest(body: retryBody)
+            self.currentTask = retryTask
+            guard let http2 = retryResponse as? HTTPURLResponse, (200..<300).contains(http2.statusCode) else {
+                throw URLError(.badServerResponse)
+            }
+            let retryApi = try JSONDecoder().decode(GenerateContentResponse.self, from: retryData)
+            guard let retryText = retryApi.candidates?.first?.content.parts.first?.text,
+                  let retryFinal = retryText.data(using: .utf8) else {
+                throw GeminiServiceError.emptyAIResponse
+            }
+            let decoded = try decodeRun(retryFinal)
+            runs.append(decoded)
+        }
+        
+        // Gate on recognition confidence & aggregate via median
+        // Only keep runs that pass the recognition gate
+        runs = runs.filter { $0.recognitionConfidence >= recognitionGateThreshold }
+        guard !runs.isEmpty else {
+            throw GeminiServiceError.lowRecognitionConfidence( (try? decodeRun(initialData).recognitionConfidence) ?? 0.0 )
+        }
+        
+        // Aggregate (median) across runs for stability
+        func aggInt(_ keyPath: KeyPath<SafetyAnalysisResponse, Int>) -> Int {
+            median(runs.map { $0[keyPath: keyPath] })
+        }
+        func aggOptInt(_ keyPath: KeyPath<SafetyAnalysisResponse, Int?>) -> Int? {
+            let vals = runs.compactMap { $0[keyPath: keyPath] }
+            return vals.isEmpty ? nil : median(vals)
+        }
+        
+        var final = runs[0]
+        final.childSafetyScore = aggInt(\.childSafetyScore)
+        final.overallSafetyScore = aggInt(\.overallSafetyScore)
+        final.dogSafetyScore = aggOptInt(\.dogSafetyScore)
+        final.catSafetyScore = aggOptInt(\.catSafetyScore)
+        
+        // Apply normalization + policy guardrails (child-first)
+        applyPolicyOverrides(&final, options: options)
+        
+        // Cache and return
+        resultCache[key] = final
+        return final
     }
     
     func cancelAnalysis() {
@@ -144,12 +299,11 @@ final class GeminiService {
         """
         
         let generationConfig: [String: Any] = [
-            "temperature": 0.2,
-            "topK": 40,
-            "topP": 0.9,
+            "temperature": 0.0,
             "maxOutputTokens": maxTokensOverride ?? 640,
             "responseMimeType": "application/json",
-            "responseSchema": SafetyAnalysisSchema.geminiResponseSchema()
+            "responseSchema": SafetyAnalysisSchema.geminiResponseSchema(),
+            "topP": 1.0
         ]
         
         let bodyDict: [String: Any] = [
@@ -161,13 +315,15 @@ final class GeminiService {
                     ["text": ocrDirective],
                     ["text": specificityDirective],
                     ["text": "Examples: 1) Image shows brown gills, convex cap with white stem → 'Mushroom — shiitake'. 2) Small red apple with yellow streaks, label 'Gala' visible → 'Apple — Gala'. 3) Long plum tomato on vine → 'Tomato — Roma'."],
+                    ["text": "Normalization: Map any detected product/brand to a canonical category (e.g., 'FRZ Tallboy' → 'Beer' → 'Alcoholic Beverage'). Always fill productType with this canonical category."],
+                    ["text": "Guardrails: If canonical category ∈ {alcohol, tobacco/nicotine, button battery, sharp magnets} then set childSafetyScore ≤ 2/10 and align overallSafetyScore to childSafetyScore. Do not contradict this with prose."]
                 ]
             ],
             "contents": [[
                 "role": "user",
                 "parts": [
                     ["inline_data": ["mime_type": "image/jpeg", "data": base64Image]],
-                    ["text": "Use integers 0-100 for scores, modelConfidence 0.0-1.0. Use nulls or empty arrays when unknown.\n\nOCR: Read any visible label/packaging text from the image and use it to decide the exact product/variety. Do not print OCR text; return JSON only.\n\nPet rules: \(petDirective)\nKid focus: \(childDirective)\n\nSpecificity: \(specificityDirective)\nAvoid generic names like 'mushroom', 'apple', 'lettuce' unless recognitionConfidence < 0.5." ]
+                    ["text": "Use integers 0-100 for scores, modelConfidence 0.0-1.0. Use nulls or empty arrays when unknown.\n\nOCR: Read any visible label/packaging text from the image and use it to decide the exact product/variety. Do not print OCR text; return JSON only.\n\nPet rules: \(petDirective)\nKid focus: \(childDirective)\n\nSpecificity: \(specificityDirective)\nAvoid generic names like 'mushroom', 'apple', 'lettuce' unless recognitionConfidence < 0.5.\nNormalization: Map brand/product names back to a canonical category before scoring (e.g., FRZ Tallboy → beer → alcohol).\nGuardrails: If category is alcohol/tobacco/nicotine/button battery, set childSafetyScore ≤ 2/10 and overallSafetyScore = childSafetyScore." ]
                 ]
             ]],
             "generationConfig": generationConfig
