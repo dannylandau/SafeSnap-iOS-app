@@ -258,6 +258,42 @@ final class GeminiService {
         return final
     }
     
+    // Returns analysis plus explainability extras for UI. Keeps existing analyzeSafety(...) intact.
+    public func analyzeSafetyWithExtras(
+        image: UIImage,
+        options: SafetyOptions,
+        streamToken: @escaping (String) -> Void,
+        visionLabels: [String] = [],
+        ocrHits: [String] = []
+    ) async throws -> AnalyzedSafety {
+        // Reuse the existing analysis pipeline for the authoritative result
+        let resp = try await analyzeSafety(image: image, options: options, streamToken: streamToken)
+        
+        // Infer canonical category using the same normalizer.
+        let cat = canonicalCategory(from: resp.productName, type: resp.productType)
+        
+        // Infer which policy rule set likely fired, based on category.
+        var rules: [String] = []
+        switch cat {
+        case "alcohol": rules.append("alcohol_guardrail")
+        case "tobacco_nicotine": rules.append("tobacco_guardrail")
+        case "button_battery": rules.append("button_battery_guardrail")
+        case "household_chemical": rules.append("household_chemical_guardrail")
+        case "caffeine": rules.append("caffeine_guardrail")
+        case "strong_magnet": rules.append("strong_magnet_guardrail")
+        case "choking_hazard": rules.append("choking_hazard_guardrail")
+        default: break
+        }
+        // We always align overall <= child as a child-first policy
+        rules.append("overall_capped_by_child")
+        
+        let extras = AnalysisExtras(
+            evidence: SafetyEvidence(labels: visionLabels, ocrHits: ocrHits),
+            policy: PolicyOutcome(canonicalCategory: cat, rulesTriggered: rules)
+        )
+        return AnalyzedSafety(response: resp, extras: extras)
+    }
+    
     func cancelAnalysis() {
         wasCancelled = true
         currentTask?.cancel()
@@ -423,4 +459,24 @@ private extension GeminiChunk {
         // We only do a very light extraction here since the schema can vary.
         return nil
     }
+}
+
+public struct SafetyEvidence: Sendable {
+    public var labels: [String]      // from Vision (image labels)
+    public var ocrHits: [String]     // from OCR
+}
+
+public struct PolicyOutcome: Sendable {
+    public var canonicalCategory: String?
+    public var rulesTriggered: [String]   // e.g., ["alcohol_guardrail", "child_overall_alignment"]
+}
+
+public struct AnalysisExtras: Sendable {
+    public var evidence: SafetyEvidence
+    public var policy: PolicyOutcome
+}
+
+public struct AnalyzedSafety: Sendable {
+    public let response: SafetyAnalysisResponse
+    public let extras: AnalysisExtras
 }
