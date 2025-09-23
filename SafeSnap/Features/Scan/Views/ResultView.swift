@@ -10,6 +10,8 @@ struct ResultView: View {
     @Environment(\.dismiss) private var dismiss
     @State private var sharePayload: SharePayload?
     @State private var headerHeight: CGFloat = 0
+    @State private var isZoomPresented: Bool = false
+    @State private var zoomImage: UIImage? = nil
 
     struct SharePayload: Identifiable { let id = UUID(); let items: [Any] }
 
@@ -36,20 +38,37 @@ struct ResultView: View {
                     }
                 }
         }
-//        .overlay(alignment: .top) {
-//            overlayHeaderBar()
-//                .background(
-//                    GeometryReader { geo in
-//                        Color.clear.preference(key: HeaderHeightKey.self, value: geo.size.height)
-//                    }
-//                )
-//                .zIndex(1)
-//        }
         .onPreferenceChange(HeaderHeightKey.self) { h in
             headerHeight = h
         }
         .sheet(item: $sharePayload) { payload in
             ShareSheet(activityItems: payload.items)
+        }
+        .fullScreenCover(isPresented: $isZoomPresented) {
+            ZStack {
+                Color.black.ignoresSafeArea()
+                if let img = zoomImage {
+                    ZoomableImageView(image: img)
+                        .ignoresSafeArea()
+                }
+                // Close button
+                VStack {
+                    HStack {
+                        Spacer()
+                        Button {
+                            isZoomPresented = false
+                        } label: {
+                            Image(systemName: "xmark.circle.fill")
+                                .font(.system(size: 28, weight: .bold))
+                                .foregroundColor(.white.opacity(0.9))
+                                .shadow(radius: 4)
+                        }
+                        .padding(.top, 20)
+                        .padding(.trailing, 20)
+                    }
+                    Spacer()
+                }
+            }
         }
     }
 
@@ -131,7 +150,10 @@ struct ResultView: View {
                         .background(Color.secondary.opacity(0.1))
                         .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
                         .shadow(radius: 4)
-                    Button { /* zoom */ } label: {
+                    Button {
+                        self.zoomImage = ui
+                        self.isZoomPresented = true
+                    } label: {
                         Image(systemName: "eye.fill")
                             .padding(8)
                             .background(.white)
@@ -257,85 +279,6 @@ struct ResultView: View {
         .cornerRadius(12)
         .padding(.horizontal)
     }
-
-    // MARK: — Rigid Overlay Header
-//    private func overlayHeaderBar() -> some View {
-//        VStack(spacing: 8) {
-//            HStack(alignment: .top, spacing: 12) {
-//                // Back
-//                Button { dismiss() } label: {
-//                    Image(systemName: "chevron.left")
-//                        .font(.headline)
-//                        .foregroundColor(.white)
-//                        .padding(10)
-//                        .background(.white.opacity(0.15))
-//                        .clipShape(Circle())
-//                        .accessibilityLabel("Back")
-//                }
-//
-//                // Title & Category — wrap fully, no truncation
-//                VStack(alignment: .leading, spacing: 4) {
-//                    Text(vm.productName)
-//                        .font(.title2.bold())
-//                        .foregroundColor(.white)
-//                        .fixedSize(horizontal: false, vertical: true) // allow multi-line
-//                    Text(vm.category)
-//                        .font(.title3)
-//                        .foregroundColor(.white.opacity(0.9))
-//                        .fixedSize(horizontal: false, vertical: true)
-//                }
-//                .padding(.top, 12)
-//
-//                Spacer(minLength: 8)
-//
-//                // Share
-//                Button { prepareShare() } label: {
-//                    Image(systemName: "square.and.arrow.up")
-//                        .font(.headline)
-//                        .foregroundColor(.white)
-//                        .padding(10)
-//                        .background(.white.opacity(0.15))
-//                        .clipShape(Circle())
-//                        .accessibilityLabel("Share")
-//                }
-//            }
-//
-//            // Optional: focused score chip to keep context visible
-//            HStack() {
-//                Spacer()
-//                Text("\(selectedScore10())/10")
-//                    .font(.subheadline.monospacedDigit()).bold()
-//                    .foregroundColor(.white)
-//                    .padding(.horizontal, 10).padding(.vertical, 6)
-//                    .background(.white.opacity(0.15))
-//                    .clipShape(Capsule())
-//                Spacer()
-//            }
-//        }
-//        .padding(.horizontal)
-//        .padding(.top, 12)
-//        .padding(.bottom, 10)
-//        .background(
-//            ZStack {
-//                // Liquid glass blur base
-//                Rectangle().fill(.ultraThinMaterial)
-//                // Subtle color tint to keep brand/color context
-//                LinearGradient(
-//                    gradient: Gradient(colors: [selectedColor.opacity(0.25), selectedColor.opacity(0.15)]),
-//                    startPoint: .topLeading,
-//                    endPoint: .bottomTrailing
-//                )
-//            }
-//        )
-//        .clipShape(RoundedRectangle(cornerRadius: 40, style: .continuous))
-//        .overlay(
-//            RoundedRectangle(cornerRadius: 40, style: .continuous)
-//                .strokeBorder(Color.white.opacity(0.25), lineWidth: 1)
-//        )
-//        .ignoresSafeArea(edges: .top)
-//        .shadow(color: .black.opacity(0.15), radius: 8, y: 2)
-//    }
-
 
     // MARK: — Scores Row (Kids / Dogs / Cats)
     private func scoresRow() -> some View {
@@ -628,4 +571,53 @@ fileprivate func score10(fromHundred value: Int) -> Int {
     // Convert 0–100 → 0–10 with rounding
     let clamped = max(0, min(100, value))
     return Int(round(Double(clamped) / 10.0))
+}
+
+// MARK: - ZoomableImageView (UIScrollView-backed)
+struct ZoomableImageView: UIViewRepresentable {
+    let image: UIImage
+    
+    func makeUIView(context: Context) -> UIScrollView {
+        let scrollView = UIScrollView()
+        scrollView.backgroundColor = .black
+        scrollView.minimumZoomScale = 1.0
+        scrollView.maximumZoomScale = 6.0
+        scrollView.bouncesZoom = true
+        scrollView.delegate = context.coordinator
+        
+        let imageView = UIImageView(image: image)
+        imageView.contentMode = .scaleAspectFit
+        imageView.clipsToBounds = true
+        imageView.translatesAutoresizingMaskIntoConstraints = false
+        
+        scrollView.addSubview(imageView)
+        context.coordinator.imageView = imageView
+        
+        // Pin imageView to scrollView's bounds
+        NSLayoutConstraint.activate([
+            imageView.leadingAnchor.constraint(equalTo: scrollView.leadingAnchor),
+            imageView.trailingAnchor.constraint(equalTo: scrollView.trailingAnchor),
+            imageView.topAnchor.constraint(equalTo: scrollView.topAnchor),
+            imageView.bottomAnchor.constraint(equalTo: scrollView.bottomAnchor),
+            imageView.widthAnchor.constraint(equalTo: scrollView.widthAnchor),
+            imageView.heightAnchor.constraint(equalTo: scrollView.heightAnchor)
+        ])
+        
+        return scrollView
+    }
+    
+    func updateUIView(_ uiView: UIScrollView, context: Context) {
+        // no-op
+    }
+    
+    func makeCoordinator() -> Coordinator {
+        Coordinator()
+    }
+    
+    final class Coordinator: NSObject, UIScrollViewDelegate {
+        weak var imageView: UIImageView?
+        func viewForZooming(in scrollView: UIScrollView) -> UIView? {
+            imageView
+        }
+    }
 }
