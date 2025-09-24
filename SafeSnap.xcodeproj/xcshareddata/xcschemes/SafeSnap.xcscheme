@@ -16,8 +16,8 @@
             <BuildableReference
                BuildableIdentifier = "primary"
                BlueprintIdentifier = "7DBA4AAF2E0DEA1700CB1313"
-               BuildableName = "SafeScan.app"
-               BlueprintName = "SafeScan"
+               BuildableName = "SafeSnap.app"
+               BlueprintName = "SafeSnap"
                ReferencedContainer = "container:SafeSnap.xcodeproj">
             </BuildableReference>
          </BuildActionEntry>
@@ -69,8 +69,8 @@
          <BuildableReference
             BuildableIdentifier = "primary"
             BlueprintIdentifier = "7DBA4AAF2E0DEA1700CB1313"
-            BuildableName = "SafeScan.app"
-            BlueprintName = "SafeScan"
+            BuildableName = "SafeSnap.app"
+            BlueprintName = "SafeSnap"
             ReferencedContainer = "container:SafeSnap.xcodeproj">
          </BuildableReference>
       </BuildableProductRunnable>
@@ -86,8 +86,8 @@
          <BuildableReference
             BuildableIdentifier = "primary"
             BlueprintIdentifier = "7DBA4AAF2E0DEA1700CB1313"
-            BuildableName = "SafeScan.app"
-            BlueprintName = "SafeScan"
+            BuildableName = "SafeSnap.app"
+            BlueprintName = "SafeSnap"
             ReferencedContainer = "container:SafeSnap.xcodeproj">
          </BuildableReference>
       </BuildableProductRunnable>

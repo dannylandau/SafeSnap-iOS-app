@@ -2,92 +2,109 @@
 //  ScanHistoryServiceTests.swift
 //  SafeSnap
 //
-//  Created by Marcin Grześkowiak on 23/07/2025.
+//  Updated to exercise the persistence model introduced by ScanHistoryItem v2.
 //
-
 
 import XCTest
 @testable import SafeSnap
 import UIKit
 
+@MainActor
 final class ScanHistoryServiceTests: XCTestCase {
-    
-    func makeTestItem(name: String = "Item", score: Int = 9) -> ScanHistoryItem {
-        ScanHistoryItem(
-            product: Product(
-                id: UUID().uuidString,
-                name: name,
-                productType: "Food",
-                safetyScore: score,
-                safetyLevel: "Safe",
-                pros: [],
-                cons: [],
-                certifications: [],
-                hygieneWarnings: []
-            ),
-            labels: [],
-            score: score,
-            thumbnail: UIImage()
+
+    private func makeAnalysis(productName: String, productType: String = "Snack", score: Int = 70) -> SafetyAnalysisResponse {
+        let pros = [SafetyAnalysisResponse.LabeledItem(label: "Nutritious", severity: .low, category: "nutrition")]
+        let cons = [SafetyAnalysisResponse.LabeledItem(label: "Sugary", severity: .medium, category: "nutrition")]
+        let general = SafetyAnalysisResponse.GeneralSafety(pros: pros, cons: cons)
+        let petWarnings = SafetyAnalysisResponse.PetSafety(
+            dogs: [SafetyAnalysisResponse.PetWarning(severity: .low, warning: "Monitor intake", reason: "Contains sugar")],
+            cats: []
+        )
+        return SafetyAnalysisResponse(
+            productName: productName,
+            productType: productType,
+            overallSafetyScore: score,
+            childSafetyScore: score,
+            dogSafetyScore: score,
+            catSafetyScore: score,
+            modelConfidence: 0.8,
+            recognitionConfidence: 0.9,
+            generalSafety: general,
+            petSafety: petWarnings,
+            hygieneWarnings: [],
+            recalls: []
         )
     }
 
-    func test_add_insertsItem() async {
-        let fileURL = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
-        let service = await MainActor.run { ScanHistoryService(fileURL: fileURL) }
-        let recordsCount0 = await MainActor.run { service.records.count }
-        XCTAssertEqual(recordsCount0, 0)
-
-        let item = makeTestItem()
-        await service.add(item)
-
-        let recordsCount1 = await MainActor.run { service.records.count }
-        XCTAssertEqual(recordsCount1, 1)
-        let firstName = await MainActor.run { service.records.first?.product.name }
-        XCTAssertEqual(firstName, item.product.name)
+    private func makeHistoryItem(name: String = "Item", score: Int = 70) -> ScanHistoryItem {
+        let analysis = makeAnalysis(productName: name, score: score)
+        return ScanHistoryItem(
+            imageFilename: "IMG_stub.jpg",
+            imageHash: UUID().uuidString,
+            userToggles: .init(includeDogs: true, includeCats: false, includeChildren: true),
+            productName: analysis.productName,
+            productType: analysis.productType,
+            categoryName: analysis.productType,
+            brand: "SnackCo",
+            confidence: 0.92,
+            visionContextRef: nil,
+            analysis: analysis,
+            model: "gemini-1.5-flash",
+            promptVersion: "v1",
+            appVersion: "1.0"
+        )
     }
 
-    func test_delete_removesCorrectItem() async {
+    func test_add_insertsItem() {
         let fileURL = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
-        let service = await MainActor.run { ScanHistoryService(fileURL: fileURL) }
-        
-        let item1 = makeTestItem(name: "Item 1")
-        let item2 = makeTestItem(name: "Item 2")
-        await service.add(item1)
-        await service.add(item2)
+        let service = ScanHistoryService(fileURL: fileURL)
+        XCTAssertEqual(service.records.count, 0)
 
-        await service.delete(at: IndexSet(integer: 0))
+        let item = makeHistoryItem()
+        service.add(item)
 
-        let recordsCount = await MainActor.run { service.records.count }
-        XCTAssertEqual(recordsCount, 1)
-        let firstName = await MainActor.run { service.records.first?.product.name }
-        XCTAssertEqual(firstName == "Item 1", true)
+        XCTAssertEqual(service.records.count, 1)
+        XCTAssertEqual(service.records.first?.productName, item.productName)
     }
 
-    func test_clearAll_removesEverything() async {
+    func test_delete_removesCorrectItem() {
         let fileURL = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
-        let service = await MainActor.run { ScanHistoryService(fileURL: fileURL) }
-        await service.add(makeTestItem())
-        await service.add(makeTestItem())
-        
-        let recordsCount = await MainActor.run { service.records.count }
-        XCTAssertEqual(recordsCount, 2)
+        let service = ScanHistoryService(fileURL: fileURL)
 
-        await service.clearAll()
+        let item1 = makeHistoryItem(name: "Item 1")
+        let item2 = makeHistoryItem(name: "Item 2")
+        service.add(item1)
+        service.add(item2)
 
-        let clearedRecordsCount = await MainActor.run { service.records.count }
-        XCTAssertEqual(clearedRecordsCount, 0)
+        service.delete(at: IndexSet(integer: 0))
+
+        XCTAssertEqual(service.records.count, 1)
+        XCTAssertEqual(service.records.first?.productName, "Item 1")
+    }
+
+    func test_clearAll_removesEverything() {
+        let fileURL = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        let service = ScanHistoryService(fileURL: fileURL)
+        service.add(makeHistoryItem())
+        service.add(makeHistoryItem())
+
+        XCTAssertEqual(service.records.count, 2)
+
+        service.clearAll()
+
+        XCTAssertEqual(service.records.count, 0)
     }
 
     func test_save_and_load_consistency() async {
         let fileURL = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
-        let service = await MainActor.run { ScanHistoryService(fileURL: fileURL) }
-        let item = makeTestItem()
-        await service.add(item)
+        let service = ScanHistoryService(fileURL: fileURL)
+        let item = makeHistoryItem(name: "Persisted")
+        service.add(item)
         await service.saveSynchronously()
 
-        let newService = await MainActor.run { ScanHistoryService(fileURL: fileURL) }
-        let restored = await MainActor.run { newService.records }
+        let newService = ScanHistoryService(fileURL: fileURL)
+        let restoredNames = newService.records.map(\.productName)
 
-        XCTAssertTrue(restored.contains(where: { $0.product.id == item.product.id }))
+        XCTAssertTrue(restoredNames.contains("Persisted"))
     }
 }

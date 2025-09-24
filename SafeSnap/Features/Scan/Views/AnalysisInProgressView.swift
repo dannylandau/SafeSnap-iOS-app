@@ -7,7 +7,7 @@ struct AnalysisInProgressView: View {
     @ObservedObject var viewModel: ScanViewModel
 
     // force read from the wrapped value, not the projected binding
-    private var coordinator: ScanAnalysisCoordinator {
+    private var coordinator: ScanAnalysisCoordinating {
         _viewModel.wrappedValue.coordinator
     }
     let errorMessage: String?
