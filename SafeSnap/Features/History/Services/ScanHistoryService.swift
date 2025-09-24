@@ -119,3 +119,5 @@ class ScanHistoryService: ObservableObject {
         return nil
     }
 }
+
+extension ScanHistoryService: ScanHistoryRecording {}

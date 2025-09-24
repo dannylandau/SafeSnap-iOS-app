@@ -56,7 +56,7 @@ final class GeminiService {
         var hasher = SHA256()
         hasher.update(data: imageData)
         // include toggles in the key
-        let toggles = "\(options.includeDogs)-\(options.includeCats)".data(using: .utf8)!
+        let toggles = "\(options.includeDogs)-\(options.includeCats)-\(options.includeChildren)".data(using: .utf8)!
         hasher.update(data: toggles)
         let digest = hasher.finalize()
         return digest.map { String(format: "%02x", $0) }.joined()
@@ -480,3 +480,5 @@ public struct AnalyzedSafety: Sendable {
     public let response: SafetyAnalysisResponse
     public let extras: AnalysisExtras
 }
+
+extension GeminiService: SafetyAnalyzing {}

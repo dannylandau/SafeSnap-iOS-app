@@ -9,6 +9,16 @@ import Foundation
 import PhotosUI
 import SwiftUI
 
+@MainActor
+protocol ScanAnalysisCoordinating: AnyObject {
+    func startGeminiScan(image: UIImage, options: SafetyOptions) async throws
+    func cancelAnalysis()
+    var latestHistoryItem: ScanHistoryItem? { get }
+    var stage: SafetyAnalyzer.Stage { get }
+}
+
+extension ScanAnalysisCoordinator: ScanAnalysisCoordinating {}
+
 final class ScanViewModel: ObservableObject {
     @Published var resultVM: RecognitionResultViewModel? = nil
     @Published var phase: ScanPhase = .idle
@@ -22,9 +32,9 @@ final class ScanViewModel: ObservableObject {
     private var lastIncludeCat: Bool = false
     private var lastIncludeChildren: Bool = false
 
-    let coordinator: ScanAnalysisCoordinator
+    let coordinator: ScanAnalysisCoordinating
 
-    init(coordinator: ScanAnalysisCoordinator) {
+    init(coordinator: ScanAnalysisCoordinating) {
         self.coordinator = coordinator
     }
 
@@ -39,11 +49,16 @@ final class ScanViewModel: ObservableObject {
         self.handleImage(uiImage)
         lastImageData = imageData
         lastUIImage = uiImage
-        let thumbnail = uiImage.resizedThumbnail()
+        lastIncludeDog = includeDog
+        lastIncludeCat = includeCat
+        lastIncludeChildren = includeChildren
 
         Task {
             do {
-                try await coordinator.startGeminiScan(image: uiImage, options: SafetyOptions(includeDogs: includeDog, includeCats: includeCat))
+                try await coordinator.startGeminiScan(
+                    image: uiImage,
+                    options: SafetyOptions(includeDogs: includeDog, includeCats: includeCat, includeChildren: includeChildren)
+                )
                 if let result = await coordinator.latestHistoryItem {
                     let viewModel = RecognitionResultViewModel(image: uiImage, from: result)
                     await MainActor.run {
