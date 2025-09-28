@@ -6,7 +6,6 @@
 //
 
 import SwiftUI
-import Clerk
 
 @MainActor
 struct AccountView: View {
@@ -40,11 +39,13 @@ struct AccountView: View {
         if isSignedIn {
             SignedInAccountView(viewModel: viewModel)
         } else {
-            AuthView(mode: .signInOrUp)
+            FirebaseAuthView(viewModel: FirebaseAuthViewModel())
         }
     }
 }
 
+#if DEBUG
 #Preview {
-    AccountView(dependencies: AppDependencies(clerk: Clerk.shared))
+    AccountView(dependencies: AppDependencies(userSession: PreviewUserSession()))
 }
+#endif

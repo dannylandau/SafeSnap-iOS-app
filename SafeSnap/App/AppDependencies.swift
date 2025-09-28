@@ -7,7 +7,7 @@
 
 
 import Foundation
-import Clerk
+import FirebaseAuth
 
 @MainActor
 final class AppDependencies {
@@ -17,18 +17,19 @@ final class AppDependencies {
     let visionService: VisionService
     let openAIService: OpenAIService
     let userSession: UserSession
-    private let clerk: Clerk
-
-    init(clerk: Clerk) {
-        self.clerk = clerk
+    init(userSession: UserSession) {
         self.geminiService = GeminiService(apiKey: Bundle.main.infoDictionaryValue(for: "GoogleGeminiAPIKey")!)
         self.historyService = ScanHistoryService()
         self.historyService.load()
-        self.userSession = ClerkUserSession(clerk: clerk)
+        self.userSession = userSession
         self.openAIService = OpenAIService(apiKey: Bundle.main.infoDictionaryValue(for: "OpenAIAPIKey")!) // TODO: Handle missing key gracefully
         self.visionService = VisionService(apiKey: Bundle.main.infoDictionaryValue(for: "GoogleVisionAPIKey")!) // TODO: Handle missing key gracefully
     }
 
+    convenience init(auth: Auth = Auth.auth()) {
+        self.init(userSession: FirebaseUserSession(auth: auth))
+    }
+
     // Shared access point
-    static var shared = AppDependencies(clerk: .shared)
+    static var shared = AppDependencies()
 }
