@@ -6,7 +6,6 @@
 //
 
 import SwiftUI
-import Clerk
 
 struct SignedInAccountView: View {
     @StateObject private var viewModel: AccountViewModel

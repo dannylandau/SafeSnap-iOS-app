@@ -28,7 +28,7 @@ private func decodeGoogleError(from data: Data) -> String? {
 }
 
 final class GeminiService {
-    private let model = "gemini-1.5-flash"
+    private let model = "gemini-2.0-flash"
     // Determinism & reliability
     private let reliabilityRuns = 3
     private let recognitionGateThreshold: Double = 0.85 // gate low-confidence recognitions

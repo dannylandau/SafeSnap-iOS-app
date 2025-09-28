@@ -7,7 +7,6 @@
 
 
 import SwiftUI
-import Clerk
 
 enum MainTab {
     case history, scan, account
@@ -63,6 +62,8 @@ struct MainTabView: View {
     }
 }
 
+#if DEBUG
 #Preview {
-    MainTabView(initialTab: .account, dependencies: AppDependencies(clerk: Clerk.shared))
+    MainTabView(initialTab: .account, dependencies: AppDependencies(userSession: PreviewUserSession()))
 }
+#endif

@@ -7,7 +7,6 @@
 
 
 import SwiftUI
-import Clerk
 
 @MainActor
 struct HistoryView: View {
@@ -38,11 +37,13 @@ struct HistoryView: View {
             SignedInHistoryView()
                 .environmentObject(viewModel)
         } else {
-            AuthView(mode: .signInOrUp)
+            FirebaseAuthView(viewModel: FirebaseAuthViewModel())
         }
     }
 }
 
+#if DEBUG
 #Preview {
-    HistoryView(dependencies: AppDependencies(clerk: Clerk.shared))
+    HistoryView(dependencies: AppDependencies(userSession: PreviewUserSession()))
 }
+#endif

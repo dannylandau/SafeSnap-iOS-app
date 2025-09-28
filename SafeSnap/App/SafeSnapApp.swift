@@ -6,54 +6,63 @@
 //
 
 import SwiftUI
-import Clerk
+import FirebaseCore
 
 @main
 struct SafeSnapApp: App {
-    @State private var clerk = Clerk.shared
-    @State private var dependencies: AppDependencies?
+    init() {
+        Self.configureFirebase()
+    }
 
     var body: some Scene {
         WindowGroup {
-            Group {
-                if let deps = dependencies {
-                    RootView(dependencies: deps)
-                } else {
-                    ProgressView()
-                }
-            }
-            .environment(clerk)
-            .task {
-                await configureClerk()
-            }
+            RootView(dependencies: AppDependencies.shared)
         }
     }
 
-    @MainActor
-    private func configureClerk() async {
-        guard let apiKey = Bundle.main.infoDictionaryValue(for: "ClerkPublishableKey") else {
-            fatalError("❌ ClerkPublishableKey not found in Info.plist")
-        }
+    private static func configureFirebase() {
+        guard FirebaseApp.app() == nil else { return }
 
-        clerk.configure(publishableKey: apiKey)
+        let bundle = Bundle.main
+        let candidatePaths = [
+            bundle.path(forResource: "GoogleService-Info", ofType: "plist"),
+            bundle.path(forResource: "GoogleService-Info", ofType: "plist", inDirectory: "Resources")
+        ]
 
-        do {
-            try await clerk.load()
-            dependencies = AppDependencies(clerk: clerk)
-        } catch {
-            print("❌ Clerk failed to load: \(error)")
-
-            // Retry once if it's a rate limit (HTTP 429)
-            if let urlError = error as? URLError, urlError.code == .badServerResponse {
-                print("⏳ Retrying Clerk load after short delay...")
-                try? await Task.sleep(nanoseconds: 2_000_000_000) // 2 seconds
-                do {
-                    try await clerk.load()
-                    dependencies = AppDependencies(clerk: clerk)
-                } catch {
-                    print("🚫 Retry failed: \(error)")
-                }
+        if let plistPath = candidatePaths.compactMap({ $0 }).first,
+           let options = FirebaseOptions(contentsOfFile: plistPath) {
+            guard validate(options: options) else {
+                fatalError("❌ GoogleService-Info.plist still contains placeholder values. Replace them with your Firebase project's configuration.")
             }
+
+            FirebaseApp.configure(options: options)
+        } else {
+            fatalError("❌ GoogleService-Info.plist not found. Add your Firebase configuration file to the project.")
         }
+    }
+
+    private static func validate(options: FirebaseOptions) -> Bool {
+        let placeholders: Set<String> = [
+            "REPLACE_WITH_API_KEY",
+            "REPLACE_WITH_PROJECT_ID",
+            "REPLACE_WITH_IOS_GOOGLE_APP_ID",
+            "REPLACE_WITH_SENDER_ID",
+            "REPLACE_WITH_CLIENT_ID.apps.googleusercontent.com",
+            "REPLACE_WITH_ANDROID_CLIENT_ID.apps.googleusercontent.com",
+            "REPLACE_WITH_STORAGE_BUCKET.appspot.com",
+            "https://REPLACE_WITH_PROJECT_ID.firebaseio.com"
+        ]
+
+        let valuesToCheck = [
+            options.apiKey,
+            options.projectID,
+            options.googleAppID,
+            options.gcmSenderID,
+            options.storageBucket,
+            options.databaseURL,
+            options.clientID
+        ].compactMap { $0 }
+
+        return valuesToCheck.allSatisfy { !placeholders.contains($0) }
     }
 }
