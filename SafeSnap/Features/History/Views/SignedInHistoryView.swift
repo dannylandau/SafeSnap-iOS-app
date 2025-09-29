@@ -274,7 +274,7 @@ struct SignedInHistoryView: View {
                     .font(.caption).foregroundColor(.secondary)
             }
             Spacer()
-            Text("\(Int(Double(item.analysis.overallSafetyScore)/10))/10")
+            Text("\(Int(round(Double(item.analysis.overallSafetyScore)/10)))/10")
                 .font(.subheadline.bold())
                 .padding(.horizontal, 8)
                 .padding(.vertical, 4)
