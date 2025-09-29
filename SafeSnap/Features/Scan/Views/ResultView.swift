@@ -11,7 +11,6 @@ struct ResultView: View {
     @State private var sharePayload: SharePayload?
     @State private var headerHeight: CGFloat = 0
     @State private var isZoomPresented: Bool = false
-    @State private var zoomImage: UIImage? = nil
 
     struct SharePayload: Identifiable { let id = UUID(); let items: [Any] }
 
@@ -47,7 +46,7 @@ struct ResultView: View {
         .fullScreenCover(isPresented: $isZoomPresented) {
             ZStack {
                 Color.black.ignoresSafeArea()
-                if let img = zoomImage {
+                if let img = self.resolvedImage {
                     ZoomableImageView(image: img)
                         .ignoresSafeArea()
                 }
@@ -164,7 +163,6 @@ struct ResultView: View {
                         .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
                         .shadow(radius: 4)
                     Button {
-                        self.zoomImage = ui
                         self.isZoomPresented = true
                     } label: {
                         Image(systemName: "eye.fill")
