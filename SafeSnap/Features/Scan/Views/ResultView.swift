@@ -79,6 +79,9 @@ struct ResultView: View {
             imageCard()
             headerBar()
             scoresRow()
+            if let duration = vm.scanDurationDescription {
+                scanDurationRow(duration: duration)
+            }
             kidSafetySection()
                 .id("childrenSection")
             if vm.includeCats || vm.includeDogs {
@@ -325,6 +328,23 @@ struct ResultView: View {
             .padding(.horizontal)
             .padding(.bottom, 4)
         }
+    }
+
+    private func scanDurationRow(duration: String) -> some View {
+        HStack(spacing: 8) {
+            Image(systemName: "timer")
+                .font(.headline)
+                .foregroundStyle(.secondary)
+            Text("Scan completed in \(duration)")
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+                .monospacedDigit()
+            Spacer()
+        }
+        .padding()
+        .background(Color.secondary.opacity(0.08))
+        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+        .padding(.horizontal)
     }
 
     // MARK: — Pet Safety

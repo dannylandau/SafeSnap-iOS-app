@@ -28,6 +28,7 @@ final class RecognitionResultViewModel: ObservableObject, Identifiable {
     let productName: String
     let category: String
     let date: Date
+    let scanDurationDescription: String?
     
     // Persisted image (filename-only for durability across reinstalls)
     let imageFilename: String?
@@ -96,6 +97,7 @@ final class RecognitionResultViewModel: ObservableObject, Identifiable {
         includeDogs: Bool,
         includeCats: Bool,
         imageFilename: String? = nil,
+        scanDurationDescription: String? = nil,
         canonicalCategory: String? = nil,
         rulesTriggered: [String] = [],
         evidence: SafetyEvidence = .init(labels: [], ocrHits: [])
@@ -108,6 +110,7 @@ final class RecognitionResultViewModel: ObservableObject, Identifiable {
         self.includeDogs = includeDogs
         self.includeCats = includeCats
         self.imageFilename = imageFilename
+        self.scanDurationDescription = scanDurationDescription
         self.canonicalCategory = canonicalCategory
         self.rulesTriggered = rulesTriggered
         self.evidence = evidence
@@ -139,7 +142,7 @@ extension RecognitionResultViewModel {
 
 // MARK: — Convenience initializers & helpers
 extension RecognitionResultViewModel {
-    convenience init(image: UIImage?, from item: ScanHistoryItem) {
+    convenience init(image: UIImage?, from item: ScanHistoryItem, scanDurationDescription: String? = nil) {
         self.init(
             image: image,
             productName: item.productName,
@@ -148,7 +151,8 @@ extension RecognitionResultViewModel {
             analysis: item.analysis,
             includeDogs: item.userToggles.includeDogs,
             includeCats: item.userToggles.includeCats,
-            imageFilename: item.imageFilename
+            imageFilename: item.imageFilename,
+            scanDurationDescription: scanDurationDescription
         )
     }
 

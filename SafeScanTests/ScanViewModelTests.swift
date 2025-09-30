@@ -121,6 +121,93 @@ final class ScanViewModelTests: XCTestCase {
     }
 
     @MainActor
+    func test_beginScan_recordsDurationWhenFlagEnabled() async {
+        let coordinator = MockCoordinator()
+        coordinator.stubHistoryItem = makeHistoryItem(includeDogs: false, includeCats: false, includeChildren: true)
+
+        let tracker = MockScanDurationTracker()
+        tracker.stubbedStopDuration = .nanoseconds(1_500_000_000) // 1.5s
+        let formatter = StubDurationFormatter()
+        formatter.stubbedValue = "1.5 s"
+        let featureFlags = StubFeatureFlags(initialValue: true)
+
+        let viewModel = ScanViewModel(
+            coordinator: coordinator,
+            durationTracker: tracker,
+            durationFormatter: formatter,
+            featureFlags: featureFlags
+        )
+
+        let image = makeImage()
+        let data = image.jpegData(compressionQuality: 0.8)!
+
+        viewModel.beginScan(with: data, uiImage: image, includeDog: false, includeCat: false, includeChildren: true)
+        try? await Task.sleep(nanoseconds: 150_000_000)
+
+        XCTAssertEqual(tracker.startCallCount, 1)
+        XCTAssertEqual(tracker.stopCallCount, 1)
+        XCTAssertEqual(viewModel.scanDurationText, "1.5 s")
+        XCTAssertEqual(viewModel.resultVM?.scanDurationDescription, "1.5 s")
+        XCTAssertEqual(formatter.capturedDurations.count, 1)
+    }
+
+    @MainActor
+    func test_beginScan_skipsDurationWhenFlagDisabled() async {
+        let coordinator = MockCoordinator()
+        coordinator.stubHistoryItem = makeHistoryItem(includeDogs: true, includeCats: false, includeChildren: true)
+
+        let tracker = MockScanDurationTracker()
+        tracker.stubbedStopDuration = .nanoseconds(900_000_000)
+        let formatter = StubDurationFormatter()
+        formatter.stubbedValue = "0.9 s"
+        let featureFlags = StubFeatureFlags(initialValue: false)
+
+        let viewModel = ScanViewModel(
+            coordinator: coordinator,
+            durationTracker: tracker,
+            durationFormatter: formatter,
+            featureFlags: featureFlags
+        )
+
+        let image = makeImage()
+        let data = image.jpegData(compressionQuality: 0.8)!
+
+        viewModel.beginScan(with: data, uiImage: image, includeDog: true, includeCat: false, includeChildren: true)
+        try? await Task.sleep(nanoseconds: 150_000_000)
+
+        XCTAssertEqual(tracker.startCallCount, 0, "Timer should not start when flag disabled")
+        XCTAssertEqual(tracker.stopCallCount, 0, "Timer should not stop when flag disabled")
+        XCTAssertNil(viewModel.scanDurationText)
+        XCTAssertNil(viewModel.resultVM?.scanDurationDescription)
+        XCTAssertTrue(formatter.capturedDurations.isEmpty)
+    }
+
+    @MainActor
+    func test_toggleDurationFlag_persistsOverrideAndResetsWhenDisabled() async {
+        let featureFlags = StubFeatureFlags(initialValue: true)
+        let tracker = MockScanDurationTracker()
+        tracker.stubbedStopDuration = .nanoseconds(500_000_000)
+        let formatter = StubDurationFormatter()
+        formatter.stubbedValue = "0.50 s"
+
+        let viewModel = ScanViewModel(
+            coordinator: MockCoordinator(),
+            durationTracker: tracker,
+            durationFormatter: formatter,
+            featureFlags: featureFlags
+        )
+
+        XCTAssertTrue(viewModel.scanDurationEnabled)
+
+        await viewModel.setScanDurationTrackingEnabled(false)
+
+        XCTAssertFalse(viewModel.scanDurationEnabled)
+        XCTAssertEqual(featureFlags.isEnabled(.scanDurationTimer), false)
+        XCTAssertEqual(tracker.resetCallCount, 1)
+        XCTAssertNil(viewModel.scanDurationText)
+    }
+
+    @MainActor
     func test_retryLastScan_reusesPreviousToggleState() async {
         let coordinator = MockCoordinator()
         coordinator.stubHistoryItem = makeHistoryItem(includeDogs: false, includeCats: true, includeChildren: true)
@@ -166,6 +253,60 @@ final class ScanViewModelTests: XCTestCase {
 }
 
 // MARK: - Mocks
+
+@MainActor
+private final class MockScanDurationTracker: ScanDurationTracking {
+    private(set) var elapsed: Duration? = nil
+    var startCallCount = 0
+    var stopCallCount = 0
+    var resetCallCount = 0
+    var stubbedStopDuration: Duration? = nil
+
+    func start() {
+        startCallCount += 1
+    }
+
+    func stop() -> Duration? {
+        stopCallCount += 1
+        elapsed = stubbedStopDuration
+        return stubbedStopDuration
+    }
+
+    func reset() {
+        resetCallCount += 1
+        elapsed = nil
+    }
+}
+
+private final class StubDurationFormatter: ScanDurationFormatting {
+    var stubbedValue: String = ""
+    private(set) var capturedDurations: [Duration] = []
+
+    func string(from duration: Duration) -> String {
+        capturedDurations.append(duration)
+        return stubbedValue
+    }
+}
+
+private final class StubFeatureFlags: FeatureFlagProviding {
+    private var value: Bool
+
+    init(initialValue: Bool) {
+        self.value = initialValue
+    }
+
+    func isEnabled(_ flag: FeatureFlag) -> Bool {
+        value
+    }
+
+    func setEnabled(_ flag: FeatureFlag, value: Bool) {
+        self.value = value
+    }
+
+    func clearOverride(_ flag: FeatureFlag) {
+        value = false
+    }
+}
 
 @MainActor
 private final class MockCoordinator: ScanAnalysisCoordinating {

@@ -23,6 +23,8 @@ final class ScanViewModel: ObservableObject {
     @Published var resultVM: RecognitionResultViewModel? = nil
     @Published var phase: ScanPhase = .idle
     @Published var scanError: ScanError? = nil
+    @Published var scanDurationText: String? = nil
+    @Published private(set) var scanDurationEnabled: Bool
     
     @MainActor let alerts = AlertCenter()
 
@@ -33,9 +35,21 @@ final class ScanViewModel: ObservableObject {
     private var lastIncludeChildren: Bool = false
 
     let coordinator: ScanAnalysisCoordinating
+    private let durationTracker: ScanDurationTracking
+    private let durationFormatter: ScanDurationFormatting
+    private let featureFlags: FeatureFlagProviding
 
-    init(coordinator: ScanAnalysisCoordinating) {
+    init(
+        coordinator: ScanAnalysisCoordinating,
+        durationTracker: ScanDurationTracking,
+        durationFormatter: ScanDurationFormatting = ScanDurationFormatter(),
+        featureFlags: FeatureFlagProviding = FeatureFlagService.shared
+    ) {
         self.coordinator = coordinator
+        self.durationTracker = durationTracker
+        self.durationFormatter = durationFormatter
+        self.featureFlags = featureFlags
+        self.scanDurationEnabled = featureFlags.isEnabled(.scanDurationTimer)
     }
 
     func handleImage(_ image: UIImage) {
@@ -45,6 +59,7 @@ final class ScanViewModel: ObservableObject {
         }
     }
 
+    @MainActor
     func beginScan(with imageData: Data, uiImage: UIImage, includeDog: Bool, includeCat: Bool, includeChildren: Bool) {
         self.handleImage(uiImage)
         lastImageData = imageData
@@ -52,6 +67,11 @@ final class ScanViewModel: ObservableObject {
         lastIncludeDog = includeDog
         lastIncludeCat = includeCat
         lastIncludeChildren = includeChildren
+        durationTracker.reset()
+        if scanDurationEnabled {
+            durationTracker.start()
+        }
+        scanDurationText = nil
 
         Task {
             do {
@@ -59,8 +79,9 @@ final class ScanViewModel: ObservableObject {
                     image: uiImage,
                     options: SafetyOptions(includeDogs: includeDog, includeCats: includeCat, includeChildren: includeChildren)
                 )
+                let durationText = await stopAndRecordDuration()
                 if let result = await coordinator.latestHistoryItem {
-                    let viewModel = RecognitionResultViewModel(image: uiImage, from: result)
+                    let viewModel = RecognitionResultViewModel(image: uiImage, from: result, scanDurationDescription: durationText)
                     await MainActor.run {
                         self.resultVM = viewModel
                         self.phase = .result(viewModel)
@@ -68,9 +89,14 @@ final class ScanViewModel: ObservableObject {
                 }
             } catch is CancellationError {
                 await MainActor.run {
+                    self.durationTracker.reset()
+                    self.scanDurationText = nil
+                }
+                await MainActor.run {
                     self.phase = .idle
                 }
             } catch let error as ScanError {
+                _ = await stopAndRecordDuration()
                 if error.localizedDescription.contains("Recognition confidence too low") {
                     await MainActor.run {
                         self.phase = .idle
@@ -89,6 +115,7 @@ final class ScanViewModel: ObservableObject {
                     }))
                 }
             } catch {
+                _ = await stopAndRecordDuration()
                 if error.localizedDescription.contains("Recognition confidence too low") {
                     await MainActor.run {
                         self.phase = .idle
@@ -137,7 +164,7 @@ final class ScanViewModel: ObservableObject {
         )
     }
 
-    func retryLastScan() {
+    @MainActor func retryLastScan() {
         guard let data = lastImageData, let image = lastUIImage else { return }
         beginScan(with: data, uiImage: image, includeDog: lastIncludeDog, includeCat: lastIncludeCat, includeChildren: lastIncludeChildren)
     }
@@ -151,6 +178,28 @@ final class ScanViewModel: ObservableObject {
             self.scanError = nil
             self.lastImageData = nil
             self.lastUIImage = nil
+            self.durationTracker.reset()
+            self.scanDurationText = nil
+        }
+    }
+
+    private func stopAndRecordDuration() async -> String? {
+        await MainActor.run {
+            guard self.scanDurationEnabled else { return nil }
+            let duration = self.durationTracker.stop()
+            let formatted = duration.map { self.durationFormatter.string(from: $0) }
+            self.scanDurationText = formatted
+            return formatted
+        }
+    }
+
+    @MainActor
+    func setScanDurationTrackingEnabled(_ isEnabled: Bool) {
+        featureFlags.setEnabled(.scanDurationTimer, value: isEnabled)
+        scanDurationEnabled = isEnabled
+        if !isEnabled {
+            durationTracker.reset()
+            scanDurationText = nil
         }
     }
 }
