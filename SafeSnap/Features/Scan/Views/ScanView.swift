@@ -51,6 +51,9 @@ struct ScanView: View {
                     scanPhotoPicker
                     scanInstructions
                     petSafetyAccordion
+#if DEBUG
+                    debugControls
+#endif
                 }
             }
         }
@@ -207,6 +210,25 @@ struct ScanView: View {
         }
         .padding(.bottom, 40)
     }
+
+#if DEBUG
+    private var debugControls: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("Debug")
+                .font(.caption.bold())
+                .foregroundStyle(.secondary)
+            Toggle(isOn: Binding(
+                get: { viewModel.scanDurationEnabled },
+                set: { viewModel.setScanDurationTrackingEnabled($0) }
+            )) {
+                Label("Show scan duration timer", systemImage: "timer")
+            }
+            .toggleStyle(.switch)
+        }
+        .padding()
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+#endif
 }
 
 private struct PetOptionsView: View {
