@@ -6,32 +6,77 @@ struct AnalysisInProgressView: View {
     let image: UIImage?
     @ObservedObject var viewModel: ScanViewModel
 
-    // force read from the wrapped value, not the projected binding
-    private var coordinator: ScanAnalysisCoordinating {
-        _viewModel.wrappedValue.coordinator
-    }
+    private let coordinator: ScanAnalysisCoordinating
+    private let concreteCoordinator: ScanAnalysisCoordinator?
+    @State private var observedStage: SafetyAnalyzer.Stage
+    @State private var observedVisionDuration: Double?
+    @State private var observedFastDuration: Double?
+    @State private var observedSmartDuration: Double?
     let errorMessage: String?
 
     init(image: UIImage?, viewModel: ScanViewModel, errorMessage: String? = nil) {
         self.image = image
         self.viewModel = viewModel
         self.errorMessage = errorMessage
+        let coordinator = viewModel.coordinator
+        self.coordinator = coordinator
+        let concrete = coordinator as? ScanAnalysisCoordinator
+        self.concreteCoordinator = concrete
+        _observedStage = State(initialValue: concrete?.stage ?? .vision)
+        _observedVisionDuration = State(initialValue: concrete?.visionDuration)
+        _observedFastDuration = State(initialValue: concrete?.fastDuration)
+        _observedSmartDuration = State(initialValue: concrete?.smartDuration)
     }
     
     // MARK: - Step presentation
-    private enum Step: CaseIterable { case vision, fast, smart }
+    private enum Step: CaseIterable { case visionScan, geminiScoring }
 
     private func status(for step: Step) -> StepStatus {
-        let current = coordinator.stage
+        let currentStage = observedStage
         switch step {
-        case .vision:
-            if current == .vision { return .current }
-            return current == .fast || current == .smart ? .done : .pending
-        case .fast:
-            if current == .fast { return .current }
-            return current == .smart ? .done : .pending
-        case .smart:
-            return current == .smart ? .current : .pending
+        case .visionScan:
+            return currentStage == .vision ? .current : .done
+        case .geminiScoring:
+            if currentStage == .vision { return .pending }
+            if currentStage == .smart { return .done }
+            switch viewModel.phase {
+            case .result, .error:
+                return .done
+            default:
+                return .current
+            }
+        }
+    }
+
+    private func title(for step: Step) -> String {
+        switch step {
+        case .visionScan:
+            return "Scanning photo details"
+        case .geminiScoring:
+            return "Evaluating safety insights"
+        }
+    }
+
+    private func subtitle(for step: Step) -> String {
+        switch step {
+        case .visionScan:
+            return "Google Vision is identifying labels, text, and brands."
+        case .geminiScoring:
+            return "Gemini is scoring the product for kids and pets."
+        }
+    }
+
+    private func duration(for step: Step) -> Double? {
+        switch status(for: step) {
+        case .pending, .current:
+            return nil
+        case .done:
+            switch step {
+            case .visionScan:
+                return observedVisionDuration
+            case .geminiScoring:
+                return observedSmartDuration ?? observedFastDuration
+            }
         }
     }
 
@@ -68,6 +113,7 @@ struct AnalysisInProgressView: View {
                             AIBreathingIndicator(size: 88)
                             Spacer()
                         }
+                        stepProgress
                     }
                     .padding(16)
                     .background(
@@ -121,6 +167,10 @@ struct AnalysisInProgressView: View {
                 .ignoresSafeArea()
             )
             .interactiveDismissDisabled(false)
+            .onReceive(stagePublisher) { observedStage = $0 }
+            .onReceive(visionDurationPublisher) { observedVisionDuration = $0 }
+            .onReceive(fastDurationPublisher) { observedFastDuration = $0 }
+            .onReceive(smartDurationPublisher) { observedSmartDuration = $0 }
         }
     }
     
@@ -167,6 +217,35 @@ struct AnalysisInProgressView: View {
                     .frame(minWidth: 44, alignment: .trailing)
             }
         }
+    }
+
+    private var stepProgress: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            ForEach(Step.allCases, id: \.self) { step in
+                stepRow(
+                    title: title(for: step),
+                    subtitle: subtitle(for: step),
+                    status: status(for: step),
+                    duration: duration(for: step)
+                )
+            }
+        }
+    }
+
+    private var stagePublisher: AnyPublisher<SafetyAnalyzer.Stage, Never> {
+        concreteCoordinator?.$stage.eraseToAnyPublisher() ?? Empty<SafetyAnalyzer.Stage, Never>().eraseToAnyPublisher()
+    }
+
+    private var visionDurationPublisher: AnyPublisher<Double?, Never> {
+        concreteCoordinator?.$visionDuration.eraseToAnyPublisher() ?? Empty<Double?, Never>().eraseToAnyPublisher()
+    }
+
+    private var fastDurationPublisher: AnyPublisher<Double?, Never> {
+        concreteCoordinator?.$fastDuration.eraseToAnyPublisher() ?? Empty<Double?, Never>().eraseToAnyPublisher()
+    }
+
+    private var smartDurationPublisher: AnyPublisher<Double?, Never> {
+        concreteCoordinator?.$smartDuration.eraseToAnyPublisher() ?? Empty<Double?, Never>().eraseToAnyPublisher()
     }
 }
 

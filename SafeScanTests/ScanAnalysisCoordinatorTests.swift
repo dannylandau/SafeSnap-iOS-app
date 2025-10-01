@@ -17,7 +17,8 @@ final class ScanAnalysisCoordinatorTests: XCTestCase {
         let analyzer = MockAnalyzer(result: analysis)
         let history = MockHistoryService()
         let imageStore = MockImageStore(result: makePersistedImage())
-        let coordinator = ScanAnalysisCoordinator(analyzer: analyzer, historyService: history, imageStore: imageStore)
+        let vision = MockVisionService(result: makeVisionAnalysisResult())
+        let coordinator = ScanAnalysisCoordinator(analyzer: analyzer, visionService: vision, historyService: history, imageStore: imageStore)
 
         let image = makeImage()
         let options = SafetyOptions(includeDogs: true, includeCats: false, includeChildren: true)
@@ -25,6 +26,7 @@ final class ScanAnalysisCoordinatorTests: XCTestCase {
         try await coordinator.startGeminiScan(image: image, options: options)
 
         XCTAssertEqual(analyzer.analyzeCallCount, 1)
+        XCTAssertEqual(vision.analyzeCallCount, 1)
         XCTAssertEqual(analyzer.capturedOptions?.includeDogs, true)
         XCTAssertEqual(imageStore.persistCalls.count, 1)
         XCTAssertEqual(history.addedItems.count, 1)
@@ -32,19 +34,47 @@ final class ScanAnalysisCoordinatorTests: XCTestCase {
         XCTAssertEqual(coordinator.currentPhase, .report)
         XCTAssertTrue(coordinator.isComplete)
         XCTAssertEqual(coordinator.explainability?.policy.canonicalCategory, analysis.extras.policy.canonicalCategory)
+        XCTAssertEqual(analyzer.capturedVisionContext?.guessName, vision.result.guess.name)
     }
 
     func test_cancelAnalysis_resetsPhase_andCancelsAnalyzer() {
         let analyzer = MockAnalyzer(result: makeAnalyzedSafety())
         let history = MockHistoryService()
         let imageStore = MockImageStore(result: makePersistedImage())
-        let coordinator = ScanAnalysisCoordinator(analyzer: analyzer, historyService: history, imageStore: imageStore)
+        let vision = MockVisionService(result: makeVisionAnalysisResult())
+        let coordinator = ScanAnalysisCoordinator(analyzer: analyzer, visionService: vision, historyService: history, imageStore: imageStore)
 
         coordinator.currentPhase = .openAI
         coordinator.cancelAnalysis()
 
         XCTAssertEqual(analyzer.cancelCallCount, 1)
         XCTAssertEqual(coordinator.currentPhase, .preparing)
+    }
+
+    func test_startGeminiScan_propagatesVisionFailure() async {
+        let analyzer = MockAnalyzer(result: makeAnalyzedSafety())
+        let history = MockHistoryService()
+        let imageStore = MockImageStore(result: makePersistedImage())
+        let failingVision = FailingVisionService(error: VisionError.failedRequest)
+        let coordinator = ScanAnalysisCoordinator(analyzer: analyzer, visionService: failingVision, historyService: history, imageStore: imageStore)
+
+        let image = makeImage()
+
+        do {
+            try await coordinator.startGeminiScan(image: image, options: SafetyOptions(includeDogs: false, includeCats: false, includeChildren: true))
+            XCTFail("Expected vision failure to throw")
+        } catch let error as ScanError {
+            switch error {
+            case .visionFailed:
+                break
+            default:
+                XCTFail("Expected visionFailed, got \(error)")
+            }
+        } catch {
+            XCTFail("Unexpected error: \(error)")
+        }
+
+        XCTAssertEqual(analyzer.analyzeCallCount, 0)
     }
 
     // MARK: - Helpers
@@ -88,6 +118,19 @@ final class ScanAnalysisCoordinatorTests: XCTestCase {
         let thumbURL = tempDir.appendingPathComponent("IMG_\(UUID().uuidString)_thumb.jpg")
         return PersistedScanImage(imageURL: imageURL, thumbnailURL: thumbURL, pixelSize: CGSize(width: 400, height: 400), format: .jpg)
     }
+
+    private func makeVisionAnalysisResult() -> VisionAnalysisResult {
+        let guess = ProductGuess(name: "Fruit Snack", type: "Snack", confidence: 0.82, brand: "SnackCo")
+        return VisionAnalysisResult(
+            guess: guess,
+            labels: ["fruit", "snack"],
+            objects: ["box"],
+            detectedText: "SnackCo Fruit Snack",
+            brandCandidates: ["SnackCo"],
+            confidence: guess.confidence,
+            sanitizedContext: "{\"labels\":[\"fruit\",\"snack\"]}"
+        )
+    }
 }
 
 // MARK: - Test Doubles
@@ -98,6 +141,7 @@ private final class MockAnalyzer: SafetyAnalyzing {
     var capturedOptions: SafetyOptions?
     var capturedImages: [UIImage] = []
     var result: AnalyzedSafety
+    var capturedVisionContext: VisionContextPayload?
 
     init(result: AnalyzedSafety) {
         self.result = result
@@ -108,12 +152,14 @@ private final class MockAnalyzer: SafetyAnalyzing {
         options: SafetyOptions,
         streamToken: @escaping (String) -> Void,
         visionLabels: [String],
-        ocrHits: [String]
+        ocrHits: [String],
+        visionContext: VisionContextPayload?
     ) async throws -> AnalyzedSafety {
         analyzeCallCount += 1
         capturedImages.append(image)
         capturedOptions = options
         streamToken("testing")
+        capturedVisionContext = visionContext
         return result
     }
 
@@ -142,5 +188,39 @@ private final class MockImageStore: ScanImageStoring {
     func persist(image: UIImage, data: Data?) async throws -> PersistedScanImage {
         persistCalls.append((image, data))
         return result
+    }
+}
+
+private final class MockVisionService: VisionServiceType {
+    var analyzeCallCount = 0
+    let result: VisionAnalysisResult
+
+    init(result: VisionAnalysisResult) {
+        self.result = result
+    }
+
+    func recognizeProduct(from image: CGImage) async throws -> ProductGuess {
+        result.guess
+    }
+
+    func analyze(image: UIImage) async throws -> VisionAnalysisResult {
+        analyzeCallCount += 1
+        return result
+    }
+}
+
+private final class FailingVisionService: VisionServiceType {
+    let error: Error
+
+    init(error: Error) {
+        self.error = error
+    }
+
+    func recognizeProduct(from image: CGImage) async throws -> ProductGuess {
+        throw error
+    }
+
+    func analyze(image: UIImage) async throws -> VisionAnalysisResult {
+        throw error
     }
 }

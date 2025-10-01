@@ -186,8 +186,54 @@ struct VisionLabelResult: Decodable {
     }
 }
 
+public struct VisionAnalysisResult {
+    public let guess: ProductGuess
+    public let labels: [String]
+    public let objects: [String]
+    public let detectedText: String?
+    public let brandCandidates: [String]
+    public let confidence: Double
+    public let sanitizedContext: String?
+
+    public init(
+        guess: ProductGuess,
+        labels: [String],
+        objects: [String],
+        detectedText: String?,
+        brandCandidates: [String],
+        confidence: Double,
+        sanitizedContext: String?
+    ) {
+        self.guess = guess
+        self.labels = labels
+        self.objects = objects
+        self.detectedText = detectedText
+        self.brandCandidates = brandCandidates
+        self.confidence = confidence
+        self.sanitizedContext = sanitizedContext
+    }
+}
+
 public protocol VisionServiceType {
     func recognizeProduct(from image: CGImage) async throws -> ProductGuess
+    func analyze(image: UIImage) async throws -> VisionAnalysisResult
+}
+
+public extension VisionServiceType {
+    func analyze(image: UIImage) async throws -> VisionAnalysisResult {
+        guard let cgImage = image.cgImage else { throw VisionError.invalidImageData }
+        let guess = try await recognizeProduct(from: cgImage)
+        let brands = guess.brand.map { [$0] } ?? []
+        return VisionAnalysisResult(
+            guess: guess,
+            labels: [],
+            objects: [],
+            detectedText: nil,
+            brandCandidates: brands,
+            confidence: guess.confidence,
+            sanitizedContext: nil
+        )
+    }
 }
 
 enum VisionError: LocalizedError {
@@ -202,6 +248,43 @@ final class VisionService: VisionServiceType {
 
     init(apiKey: String) {
         self.apiKey = apiKey
+    }
+
+    func analyze(image: UIImage) async throws -> VisionAnalysisResult {
+        guard let jpeg = image.jpegData(compressionQuality: 0.9) else {
+            throw VisionError.invalidImageData
+        }
+
+        let rawData = try await detectProducts(in: jpeg)
+        let classifier = VisionLabelResult(labelAnnotations: nil)
+        let identification = try classifier.classifyProduct(from: rawData)
+
+        let guess = ProductGuess(
+            name: identification.productName,
+            type: identification.productType,
+            confidence: max(0.0, min(1.0, identification.confidence)),
+            brand: identification.brandCandidates.first
+        )
+
+        let sanitizedData = try? sanitizedOpenAIData(from: rawData)
+        let sanitizedContext: String?
+        if let sanitizedData,
+           let json = String(data: sanitizedData, encoding: .utf8)?.trimmingCharacters(in: .whitespacesAndNewlines),
+           !json.isEmpty {
+            sanitizedContext = json
+        } else {
+            sanitizedContext = nil
+        }
+
+        return VisionAnalysisResult(
+            guess: guess,
+            labels: identification.labels,
+            objects: identification.objects,
+            detectedText: identification.detectedText,
+            brandCandidates: identification.brandCandidates,
+            confidence: guess.confidence,
+            sanitizedContext: sanitizedContext
+        )
     }
 
     func detectProducts(in imageData: Data) async throws -> Data {

@@ -17,7 +17,8 @@ final class SafeSnapEndToEndTests: XCTestCase {
         let historyService = makeHistoryService()
         let analyzer = MockAnalyzer(result: makeAnalyzedSafety())
         let imageStore = InMemoryImageStore()
-        let coordinator = ScanAnalysisCoordinator(analyzer: analyzer, historyService: historyService, imageStore: imageStore)
+        let vision = MockVisionService(result: makeVisionAnalysisResult())
+        let coordinator = ScanAnalysisCoordinator(analyzer: analyzer, visionService: vision, historyService: historyService, imageStore: imageStore)
         let viewModel = ScanViewModel(coordinator: coordinator)
 
         let (image, data) = makeImage()
@@ -38,7 +39,8 @@ final class SafeSnapEndToEndTests: XCTestCase {
         let historyService = makeHistoryService()
         let analyzer = MockAnalyzer(result: makeAnalyzedSafety())
         let imageStore = InMemoryImageStore()
-        let coordinator = ScanAnalysisCoordinator(analyzer: analyzer, historyService: historyService, imageStore: imageStore)
+        let vision = MockVisionService(result: makeVisionAnalysisResult())
+        let coordinator = ScanAnalysisCoordinator(analyzer: analyzer, visionService: vision, historyService: historyService, imageStore: imageStore)
         let viewModel = ScanViewModel(coordinator: coordinator)
         let accountVM = AccountViewModel(userSession: MockUserSession(), historyService: historyService)
 
@@ -90,6 +92,19 @@ final class SafeSnapEndToEndTests: XCTestCase {
         return AnalyzedSafety(response: response, extras: extras)
     }
 
+    private func makeVisionAnalysisResult() -> VisionAnalysisResult {
+        let guess = ProductGuess(name: "Fruit Snack", type: "Snack", confidence: 0.82, brand: "SnackCo")
+        return VisionAnalysisResult(
+            guess: guess,
+            labels: ["fruit", "snack"],
+            objects: ["box"],
+            detectedText: "SnackCo Fruit Snack",
+            brandCandidates: ["SnackCo"],
+            confidence: guess.confidence,
+            sanitizedContext: "{\"labels\":[\"fruit\"],\"ocr\":[\"Fruit Snack\"]}"
+        )
+    }
+
     private func makeImage(size: CGSize = CGSize(width: 40, height: 40)) -> (UIImage, Data) {
         let image = UIGraphicsImageRenderer(size: size).image { ctx in
             UIColor.systemGreen.setFill()
@@ -135,7 +150,8 @@ private final class MockAnalyzer: SafetyAnalyzing {
         options: SafetyOptions,
         streamToken: @escaping (String) -> Void,
         visionLabels: [String],
-        ocrHits: [String]
+        ocrHits: [String],
+        visionContext: VisionContextPayload?
     ) async throws -> AnalyzedSafety {
         analyzeCallCount += 1
         streamToken("testing")
@@ -157,5 +173,21 @@ private final class InMemoryImageStore: ScanImageStoring {
         let thumbURL = base.appendingPathComponent("IMG_\(UUID().uuidString)_thumb.jpg")
         let pixelSize = CGSize(width: image.size.width * image.scale, height: image.size.height * image.scale)
         return PersistedScanImage(imageURL: imageURL, thumbnailURL: thumbURL, pixelSize: pixelSize, format: .jpg)
+    }
+}
+
+private final class MockVisionService: VisionServiceType {
+    let result: VisionAnalysisResult
+
+    init(result: VisionAnalysisResult) {
+        self.result = result
+    }
+
+    func recognizeProduct(from image: CGImage) async throws -> ProductGuess {
+        result.guess
+    }
+
+    func analyze(image: UIImage) async throws -> VisionAnalysisResult {
+        result
     }
 }

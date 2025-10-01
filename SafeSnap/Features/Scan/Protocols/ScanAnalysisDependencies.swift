@@ -17,13 +17,45 @@ struct PersistedScanImage: Equatable {
     let format: Format
 }
 
+struct VisionContextPayload {
+    let guessName: String
+    let guessType: String
+    let confidence: Double
+    let brandCandidates: [String]
+    let labels: [String]
+    let objects: [String]
+    let detectedText: String?
+    let sanitizedContext: String?
+
+    init(
+        guessName: String,
+        guessType: String,
+        confidence: Double,
+        brandCandidates: [String],
+        labels: [String],
+        objects: [String],
+        detectedText: String?,
+        sanitizedContext: String?
+    ) {
+        self.guessName = guessName
+        self.guessType = guessType
+        self.confidence = confidence
+        self.brandCandidates = brandCandidates
+        self.labels = labels
+        self.objects = objects
+        self.detectedText = detectedText
+        self.sanitizedContext = sanitizedContext
+    }
+}
+
 protocol SafetyAnalyzing {
     func analyzeSafetyWithExtras(
         image: UIImage,
         options: SafetyOptions,
         streamToken: @escaping (String) -> Void,
         visionLabels: [String],
-        ocrHits: [String]
+        ocrHits: [String],
+        visionContext: VisionContextPayload?
     ) async throws -> AnalyzedSafety
     func cancelAnalysis()
 }

@@ -147,7 +147,12 @@ final class GeminiService {
         self.apiKey = apiKey
     }
     
-    func analyzeSafety(image: UIImage, options: SafetyOptions, streamToken: @escaping (String) -> Void) async throws -> SafetyAnalysisResponse {
+    func analyzeSafety(
+        image: UIImage,
+        options: SafetyOptions,
+        streamToken: @escaping (String) -> Void,
+        visionContext: VisionContextPayload? = nil
+    ) async throws -> SafetyAnalysisResponse {
         wasCancelled = false
         streamToken("Analyzing with Gemini…")
         // Encode once up front for cache key & payload
@@ -160,7 +165,7 @@ final class GeminiService {
             return cached
         }
         if wasCancelled || Task.isCancelled { throw CancellationError() }
-        let body = try makeRequestBody(image: image, options: options)
+        let body = try makeRequestBody(image: image, options: options, visionContext: visionContext)
         let (data, response, taskRef) = try await makeNonStreamingRequest(body: body)
         self.currentTask = taskRef
         if wasCancelled || Task.isCancelled { throw CancellationError() }
@@ -213,7 +218,7 @@ final class GeminiService {
         while runs.count < reliabilityRuns {
             if wasCancelled || Task.isCancelled { throw CancellationError() }
             streamToken("Ensuring consistency… (\(runs.count + 1)/\(reliabilityRuns))")
-            let retryBody = try makeRequestBody(image: image, options: options, maxTokensOverride: 768)
+            let retryBody = try makeRequestBody(image: image, options: options, maxTokensOverride: 768, visionContext: visionContext)
             let (retryData, retryResponse, retryTask) = try await makeNonStreamingRequest(body: retryBody)
             self.currentTask = retryTask
             guard let http2 = retryResponse as? HTTPURLResponse, (200..<300).contains(http2.statusCode) else {
@@ -264,10 +269,16 @@ final class GeminiService {
         options: SafetyOptions,
         streamToken: @escaping (String) -> Void,
         visionLabels: [String] = [],
-        ocrHits: [String] = []
+        ocrHits: [String] = [],
+        visionContext: VisionContextPayload?
     ) async throws -> AnalyzedSafety {
         // Reuse the existing analysis pipeline for the authoritative result
-        let resp = try await analyzeSafety(image: image, options: options, streamToken: streamToken)
+        let resp = try await analyzeSafety(
+            image: image,
+            options: options,
+            streamToken: streamToken,
+            visionContext: visionContext
+        )
         
         // Infer canonical category using the same normalizer.
         let cat = canonicalCategory(from: resp.productName, type: resp.productType)
@@ -300,7 +311,12 @@ final class GeminiService {
         currentTask = nil
     }
     
-    private func makeRequestBody(image: UIImage, options: SafetyOptions, maxTokensOverride: Int? = nil) throws -> Data {
+    private func makeRequestBody(
+        image: UIImage,
+        options: SafetyOptions,
+        maxTokensOverride: Int? = nil,
+        visionContext: VisionContextPayload? = nil
+    ) throws -> Data {
         guard let imageData = image.jpegData(compressionQuality: 0.9) else {
             throw NSError(domain: "GeminiService", code: -1, userInfo: [NSLocalizedDescriptionKey: "Unable to encode image"])
         }
@@ -342,6 +358,18 @@ final class GeminiService {
             "topP": 1.0
         ]
         
+        var userParts: [[String: Any]] = [
+            ["inline_data": ["mime_type": "image/jpeg", "data": base64Image]],
+            ["text": "Use integers 0-100 for scores, modelConfidence 0.0-1.0. Use nulls or empty arrays when unknown.\n\nOCR: Read any visible label/packaging text from the image and use it to decide the exact product/variety. Do not print OCR text; return JSON only.\n\nPet rules: \(petDirective)\nKid focus: \(childDirective)\n\nSpecificity: \(specificityDirective)\nAvoid generic names like 'mushroom', 'apple', 'lettuce' unless recognitionConfidence < 0.5.\nNormalization: Map brand/product names back to a canonical category before scoring (e.g., FRZ Tallboy → beer → alcohol).\nGuardrails: If category is alcohol/tobacco/nicotine/button battery, set childSafetyScore ≤ 2/10 and overallSafetyScore = childSafetyScore."]
+        ]
+
+        if let visionContext {
+            userParts.append(["text": visionSummary(from: visionContext)])
+            if let sanitized = limitedVisionJSON(from: visionContext.sanitizedContext) {
+                userParts.append(["text": "Vision structured JSON:\n\(sanitized)"])
+            }
+        }
+
         let bodyDict: [String: Any] = [
             "systemInstruction": [
                 "parts": [
@@ -357,14 +385,114 @@ final class GeminiService {
             ],
             "contents": [[
                 "role": "user",
-                "parts": [
-                    ["inline_data": ["mime_type": "image/jpeg", "data": base64Image]],
-                    ["text": "Use integers 0-100 for scores, modelConfidence 0.0-1.0. Use nulls or empty arrays when unknown.\n\nOCR: Read any visible label/packaging text from the image and use it to decide the exact product/variety. Do not print OCR text; return JSON only.\n\nPet rules: \(petDirective)\nKid focus: \(childDirective)\n\nSpecificity: \(specificityDirective)\nAvoid generic names like 'mushroom', 'apple', 'lettuce' unless recognitionConfidence < 0.5.\nNormalization: Map brand/product names back to a canonical category before scoring (e.g., FRZ Tallboy → beer → alcohol).\nGuardrails: If category is alcohol/tobacco/nicotine/button battery, set childSafetyScore ≤ 2/10 and overallSafetyScore = childSafetyScore." ]
-                ]
+                "parts": userParts
             ]],
             "generationConfig": generationConfig
         ]
         return try JSONSerialization.data(withJSONObject: bodyDict, options: [])
+    }
+
+    private func visionSummary(from context: VisionContextPayload) -> String {
+        var lines: [String] = []
+        let confidencePercent = Int((context.confidence * 100).rounded())
+        lines.append("Primary Vision guess: \(context.guessName) (\(context.guessType)) — confidence \(confidencePercent)%")
+
+        if let bestGuess = extractBestGuess(from: context.sanitizedContext), !bestGuess.isEmpty {
+            lines.append("Vision best guess label: \(bestGuess)")
+        }
+
+        if !context.brandCandidates.isEmpty {
+            let brands = context.brandCandidates.prefix(3).joined(separator: ", ")
+            lines.append("Brand candidates: \(brands)")
+        }
+        if !context.labels.isEmpty {
+            let labels = context.labels.prefix(6).joined(separator: ", ")
+            lines.append("Top labels: \(labels)")
+        }
+        if !context.objects.isEmpty {
+            let objects = context.objects.prefix(6).joined(separator: ", ")
+            lines.append("Detected objects: \(objects)")
+        }
+        if let colors = extractDominantColors(from: context.sanitizedContext), !colors.isEmpty {
+            lines.append("Dominant colors: \(colors.joined(separator: ", "))")
+        }
+        if let text = context.detectedText?.trimmingCharacters(in: .whitespacesAndNewlines), !text.isEmpty {
+            let snippet = text.count > 180 ? String(text.prefix(180)) + "…" : text
+            lines.append("OCR snippet: \(snippet)")
+        }
+        lines.append("Use this Vision context as ground truth hints; prefer the actual image if there is a conflict.")
+        return "Google Vision summary:\n" + lines.joined(separator: "\n")
+    }
+
+    private func limitedVisionJSON(from rawJSON: String?) -> String? {
+        guard let rawJSON, !rawJSON.isEmpty else { return nil }
+        guard let data = rawJSON.data(using: .utf8),
+              let jsonObject = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
+            return rawJSON
+        }
+
+        var limited = jsonObject
+        if var signals = limited["signals"] as? [String: Any] {
+            func limitArray(_ key: String, maxCount: Int) {
+                if let array = signals[key] as? [Any], array.count > maxCount {
+                    signals[key] = Array(array.prefix(maxCount))
+                }
+            }
+            limitArray("labels", maxCount: 8)
+            limitArray("objects", maxCount: 8)
+            limitArray("webEntities", maxCount: 8)
+            limitArray("dominantColors", maxCount: 5)
+            limitArray("logoAnnotations", maxCount: 5)
+            if var text = signals["detectedText"] as? String, text.count > 400 {
+                text = String(text.prefix(400))
+                signals["detectedText"] = text
+            }
+            limited["signals"] = signals
+        }
+
+        if var summary = limited["summary"] as? [String: Any],
+           let confidence = summary["confidence"] as? Double {
+            summary["confidence"] = Double(round(confidence * 1000) / 1000)
+            limited["summary"] = summary
+        }
+
+        if let trimmedData = try? JSONSerialization.data(withJSONObject: limited, options: [.sortedKeys]),
+           let trimmedString = String(data: trimmedData, encoding: .utf8) {
+            return trimmedString
+        }
+        return rawJSON
+    }
+
+    private func extractBestGuess(from rawJSON: String?) -> String? {
+        guard let rawJSON,
+              let data = rawJSON.data(using: .utf8),
+              let jsonObject = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let signals = jsonObject["signals"] as? [String: Any] else {
+            return nil
+        }
+        if let bestGuess = signals["bestGuess"] as? String, !bestGuess.isEmpty {
+            return bestGuess
+        }
+        if let summary = jsonObject["summary"] as? [String: Any],
+           let productName = summary["productName"] as? String, !productName.isEmpty {
+            return productName
+        }
+        return nil
+    }
+
+    private func extractDominantColors(from rawJSON: String?) -> [String]? {
+        guard let rawJSON,
+              let data = rawJSON.data(using: .utf8),
+              let jsonObject = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let signals = jsonObject["signals"] as? [String: Any],
+              let colors = signals["dominantColors"] as? [[String: Any]] else {
+            return nil
+        }
+        let hexValues = colors.compactMap { item -> String? in
+            if let hex = item["hex"] as? String, !hex.isEmpty { return hex }
+            return nil
+        }
+        return Array(hexValues.prefix(3))
     }
     
     private func makeStreamingRequest(body: Data) async throws -> (URLSession.AsyncBytes, URLResponse) {
