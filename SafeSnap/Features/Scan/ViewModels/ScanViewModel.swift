@@ -15,6 +15,10 @@ protocol ScanAnalysisCoordinating: AnyObject {
     func cancelAnalysis()
     var latestHistoryItem: ScanHistoryItem? { get }
     var stage: SafetyAnalyzer.Stage { get }
+    var fastDuration: TimeInterval? { get }
+    var visionDuration: TimeInterval? { get }
+    var smartDuration: TimeInterval? { get }
+    
 }
 
 extension ScanAnalysisCoordinator: ScanAnalysisCoordinating {}

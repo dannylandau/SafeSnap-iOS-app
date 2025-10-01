@@ -72,6 +72,7 @@ private actor FileScanImageStore: ScanImageStoring {
 }
 
 enum ScanError: Identifiable, LocalizedError {
+    case visionFailed(reason: String, underlying: Error? = nil)
     case openAIFailed(reason: String, underlying: Error? = nil)
     case missingOpenAIResult
     
@@ -79,10 +80,14 @@ enum ScanError: Identifiable, LocalizedError {
     
     // Convenience
     var underlyingError: Error? {
-        if case let .openAIFailed(_, underlying) = self {
+        switch self {
+        case let .openAIFailed(_, underlying):
             return underlying
+        case let .visionFailed(_, underlying):
+            return underlying
+        case .missingOpenAIResult:
+            return nil
         }
-        return nil
     }
     private var underlyingLE: LocalizedError? { underlyingError as? LocalizedError }
     
@@ -92,6 +97,8 @@ enum ScanError: Identifiable, LocalizedError {
             return d
         }
         switch self {
+        case .visionFailed(let reason, _):
+            return "Vision analysis failed: \(reason)"
         case .openAIFailed(let reason, _):
             return "Analysis failed: \(reason)"
         case .missingOpenAIResult:
@@ -104,6 +111,8 @@ enum ScanError: Identifiable, LocalizedError {
             return r
         }
         switch self {
+        case .visionFailed(let reason, _):
+            return reason
         case .openAIFailed(let reason, _):
             return reason
         case .missingOpenAIResult:
@@ -116,6 +125,8 @@ enum ScanError: Identifiable, LocalizedError {
             return s
         }
         switch self {
+        case .visionFailed:
+            return "Try retaking the photo with better lighting and ensure the label is readable."
         case .openAIFailed:
             return "Check your connection and try again, or run the deeper check."
         case .missingOpenAIResult:
@@ -149,6 +160,7 @@ final class ScanAnalysisCoordinator: ObservableObject {
     @Published var scanError: ScanError?
     
     private let analyzer: SafetyAnalyzing
+    private let visionService: VisionServiceType
     private let historyService: ScanHistoryRecording
     private let imageStore: ScanImageStoring
     
@@ -160,58 +172,99 @@ final class ScanAnalysisCoordinator: ObservableObject {
     @Published var latestHistoryItem: ScanHistoryItem?
     @Published var explainability: AnalysisExtras? = nil
     
-    convenience init(geminiService: GeminiService, historyService: ScanHistoryService) {
-        self.init(analyzer: geminiService, historyService: historyService)
+    convenience init(geminiService: GeminiService, visionService: VisionServiceType, historyService: ScanHistoryService) {
+        self.init(analyzer: geminiService, visionService: visionService, historyService: historyService)
     }
 
-    init(analyzer: SafetyAnalyzing, historyService: ScanHistoryRecording, imageStore: ScanImageStoring = FileScanImageStore()) {
+    init(
+        analyzer: SafetyAnalyzing,
+        visionService: VisionServiceType,
+        historyService: ScanHistoryRecording,
+        imageStore: ScanImageStoring = FileScanImageStore()
+    ) {
         self.analyzer = analyzer
+        self.visionService = visionService
         self.historyService = historyService
         self.imageStore = imageStore
     }
     
     @MainActor
     func startGeminiScan(image: UIImage, options: SafetyOptions) async throws {
+        stage = .vision
+        visionDuration = nil
+        fastDuration = nil
+        smartDuration = nil
+        let visionStart = ContinuousClock.now
+        let visionResult: VisionAnalysisResult
+        do {
+            visionResult = try await visionService.analyze(image: image)
+        } catch {
+            throw ScanError.visionFailed(reason: error.localizedDescription, underlying: error)
+        }
+        visionGuess = visionResult.guess
+        visionDuration = seconds(visionStart.duration(to: ContinuousClock.now))
+
         currentPhase = .openAI
+        stage = .fast
+
+        let labels = visionResult.labels
+        let ocrHits = extractOCRHits(from: visionResult.detectedText)
+        let visionContext = VisionContextPayload(
+            guessName: visionResult.guess.name,
+            guessType: visionResult.guess.type,
+            confidence: visionResult.guess.confidence,
+            brandCandidates: visionResult.brandCandidates,
+            labels: labels,
+            objects: visionResult.objects,
+            detectedText: visionResult.detectedText,
+            sanitizedContext: visionResult.sanitizedContext
+        )
+
+        let fastStart = ContinuousClock.now
         let analyzed = try await analyzer.analyzeSafetyWithExtras(
             image: image,
             options: options,
             streamToken: { [weak self] _ in
                 Task { @MainActor in self?.partial = "Analyzing…" }
             },
-            visionLabels: [],
-            ocrHits: []
+            visionLabels: labels,
+            ocrHits: ocrHits,
+            visionContext: visionContext
         )
+        fastDuration = seconds(fastStart.duration(to: ContinuousClock.now))
         let result = analyzed.response
         self.explainability = analyzed.extras
-        
+        self.modelconfidence = result.modelConfidence
+        self.stage = .smart
+        self.smartDuration = fastDuration
+
         // Persist image and build history item
         let imageData: Data = image.jpegData(compressionQuality: 0.9) ?? Data()
         self.safetyAnalysis = result
-        
+
         // Map options to history toggles
         let toggles = ScanHistoryItem.UserToggles(
             includeDogs: options.includeDogs,
             includeCats: options.includeCats,
             includeChildren: options.includeChildren
         )
-        
+
         let storeResult = try await imageStore.persist(image: image, data: imageData)
         let imageURL = storeResult.imageURL
         // Persisted image at: \(imageURL.lastPathComponent), thumb: \(storeResult.thumbnailURL.lastPathComponent) size: \(Int(storeResult.pixelSize.width))x\(Int(storeResult.pixelSize.height))
-        
+
         // Prefer canonical category from policy extras if available
         let canonicalType = analyzed.extras.policy.canonicalCategory ?? result.productType
         let product = ProductIdentification(
             productType: canonicalType,
-            productName: result.productName,
-            brandCandidates: [],
-            labels: analyzed.extras.evidence.labels,
-            objects: [],
-            detectedText: analyzed.extras.evidence.ocrHits.isEmpty ? nil : analyzed.extras.evidence.ocrHits.joined(separator: ", "),
-            confidence: result.recognitionConfidence
+            productName: visionResult.guess.name,
+            brandCandidates: visionResult.brandCandidates,
+            labels: labels,
+            objects: visionResult.objects,
+            detectedText: visionResult.detectedText,
+            confidence: visionResult.confidence
         )
-        
+
         let item = ScanHistoryBuilder.build(
             product: product,
             analysis: result,
@@ -229,10 +282,24 @@ final class ScanAnalysisCoordinator: ObservableObject {
         // Advance phase to report for UI to render
         self.currentPhase = .report
     }
-    
+
     func cancelAnalysis() {
         analyzer.cancelAnalysis()
         currentPhase = .preparing
     }
-    
+
+    private func seconds(_ duration: Duration) -> Double {
+        let components = duration.components
+        let attosecondsPerSecond = 1_000_000_000_000_000_000.0
+        return Double(components.seconds) + Double(components.attoseconds) / attosecondsPerSecond
+    }
+
+    private func extractOCRHits(from text: String?) -> [String] {
+        guard let text = text, !text.isEmpty else { return [] }
+        let separators = CharacterSet.newlines.union(.punctuationCharacters)
+        return text
+            .components(separatedBy: separators)
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
+    }
 }
