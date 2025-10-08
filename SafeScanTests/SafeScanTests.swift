@@ -83,7 +83,16 @@ final class SafeSnapEndToEndTests: XCTestCase {
             generalSafety: general,
             petSafety: pet,
             hygieneWarnings: [],
-            recalls: []
+            recalls: [],
+            kidPros: ["High fibre"],
+            kidCons: ["Contains xylitol"],
+            kidNarrative: "Mock narrative for child safety.",
+            dogPros: ["Offer only in tiny bites", "Provide water afterwards", "Monitor for GI upset"],
+            dogCons: ["Contains xylitol which is toxic", "High sugar stresses pancreas", "May trigger hypoglycemia"],
+            dogNarrative: "Mock narrative for dog safety.",
+            catPros: ["No direct cat benefit", "Only use under vet guidance", "Provide alternative treats"],
+            catCons: ["Artificial sweeteners irritate cats", "High sugar can upset stomach", "Potential for vomiting"],
+            catNarrative: "Mock narrative for cat safety."
         )
         let extras = AnalysisExtras(
             evidence: SafetyEvidence(labels: ["snack"], ocrHits: ["Fruit Snack"]),

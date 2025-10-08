@@ -12,13 +12,27 @@ public struct SafetyAnalysisResponse: Codable, Equatable {
     public var productName: String
     public var productType: String
     
-    // Displayed in UI: mirrors current scope (child vs selected pet)
+    // Displayed in UI (derived in-app). Prefer per-audience scores below.
+    @available(*, deprecated, message: "Use childSafetyScore/dogSafetyScore/catSafetyScore and select per UI focus.")
     public var overallSafetyScore: Int
     
     // Safety scores
     public var childSafetyScore: Int                // 0–100 (human child)
     public var dogSafetyScore: Int?                 // 0–100
     public var catSafetyScore: Int?                 // 0–100
+    
+    // UI content for Kids (optional; supplied by model when available)
+    public var kidPros: [String]         // benefits/positives for children
+    public var kidCons: [String]         // concerns/risks for children
+    public var kidNarrative: String      // short explanatory paragraph
+
+    // UI content for pets (optional; supplied when pet analysis enabled)
+    public var dogPros: [String]?        // benefits/positives for dogs
+    public var dogCons: [String]?        // concerns/risks for dogs
+    public var dogNarrative: String?     // summary paragraph for dogs
+    public var catPros: [String]?        // benefits/positives for cats
+    public var catCons: [String]?        // concerns/risks for cats
+    public var catNarrative: String?     // summary paragraph for cats
     
     // Confidence
     public var modelConfidence: Double              // 0.0–1.0
@@ -34,14 +48,23 @@ public struct SafetyAnalysisResponse: Codable, Equatable {
                 productType: String,
                 overallSafetyScore: Int,
                 childSafetyScore: Int,
-                dogSafetyScore: Int,
-                catSafetyScore: Int,
+                dogSafetyScore: Int? = nil,
+                catSafetyScore: Int? = nil,
                 modelConfidence: Double,
                 recognitionConfidence: Double,
                 generalSafety: GeneralSafety,
                 petSafety: PetSafety,
                 hygieneWarnings: [HygieneWarning],
-                recalls: [Recall]) {
+                recalls: [Recall],
+                kidPros: [String],
+                kidCons: [String],
+                kidNarrative: String,
+                dogPros: [String]? = nil,
+                dogCons: [String]? = nil,
+                dogNarrative: String? = nil,
+                catPros: [String]? = nil,
+                catCons: [String]? = nil,
+                catNarrative: String? = nil) {
         self.productName = productName
         self.productType = productType
         self.overallSafetyScore = overallSafetyScore
@@ -54,6 +77,15 @@ public struct SafetyAnalysisResponse: Codable, Equatable {
         self.petSafety = petSafety
         self.hygieneWarnings = hygieneWarnings
         self.recalls = recalls
+        self.kidPros = kidPros
+        self.kidCons = kidCons
+        self.kidNarrative = kidNarrative
+        self.dogPros = dogPros
+        self.dogCons = dogCons
+        self.dogNarrative = dogNarrative
+        self.catPros = catPros
+        self.catCons = catCons
+        self.catNarrative = catNarrative
     }
 
     // MARK: - Nested Types

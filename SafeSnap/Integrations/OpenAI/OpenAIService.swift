@@ -668,6 +668,37 @@ final class OpenAIService: OpenAIServiceType {
         // Choose a conservative overall (child-focused here). SafetyAnalyzer will remap for pets.
         let overall = child100
 
+        let kidPros = ctx.pros.map(\.label)
+        let kidCons = ctx.cons.map(\.label)
+        let childNarrative = "Heuristic backup result. Interpret scores using the listed child-focused pros and cons."
+
+        func defaultPros(for pet: String) -> [String] {
+            ["Offer only in tiny portions", "Monitor \(pet) for adverse reactions", "Consult a vet if unsure"]
+        }
+
+        func warningSummaries(from warnings: [SafetyAnalysisResponse.PetWarning]) -> [String] {
+            warnings.map { $0.warning }
+        }
+
+        func narrative(for pet: String, warnings: [SafetyAnalysisResponse.PetWarning]) -> String {
+            let core = warnings.map { $0.reason }.filter { !$0.isEmpty }.prefix(2).joined(separator: " ")
+            if core.isEmpty {
+                return "Heuristic guidance: treat this item as potentially risky for \(pet)s and monitor closely."
+            }
+            return "Heuristic guidance: \(core)"
+        }
+
+        let includeDogsExplain = (shouldAnalyzePets && request.includeDogs) || dangerousToAllPets
+        let includeCatsExplain = (shouldAnalyzePets && request.includeCats) || dangerousToAllPets
+
+        let dogProsExplain: [String]? = includeDogsExplain ? defaultPros(for: "dog") : nil
+        let dogConsExplain: [String]? = includeDogsExplain ? warningSummaries(from: petSafety.dogs) : nil
+        let dogNarrativeExplain: String? = includeDogsExplain ? narrative(for: "dog", warnings: petSafety.dogs) : nil
+
+        let catProsExplain: [String]? = includeCatsExplain ? defaultPros(for: "cat") : nil
+        let catConsExplain: [String]? = includeCatsExplain ? warningSummaries(from: petSafety.cats) : nil
+        let catNarrativeExplain: String? = includeCatsExplain ? narrative(for: "cat", warnings: petSafety.cats) : nil
+
         return SafetyAnalysisResponse(
             productName: name,
             productType: type,
@@ -680,7 +711,16 @@ final class OpenAIService: OpenAIServiceType {
             generalSafety: SafetyAnalysisResponse.GeneralSafety(pros: ctx.pros, cons: ctx.cons),
             petSafety: petSafety,
             hygieneWarnings: hygiene,
-            recalls: recalls
+            recalls: recalls,
+            kidPros: kidPros,
+            kidCons: kidCons,
+            kidNarrative: childNarrative,
+            dogPros: dogProsExplain,
+            dogCons: dogConsExplain,
+            dogNarrative: dogNarrativeExplain,
+            catPros: catProsExplain,
+            catCons: catConsExplain,
+            catNarrative: catNarrativeExplain
         )
     }
 
@@ -943,4 +983,3 @@ private extension Bundle {
         infoDictionary?[key] as? String
     }
 }
-

@@ -11,6 +11,9 @@ struct ResultView: View {
     @State private var sharePayload: SharePayload?
     @State private var headerHeight: CGFloat = 0
     @State private var isZoomPresented: Bool = false
+    @State private var kidsCollapsed: Bool = false
+    @State private var dogsCollapsed: Bool = true
+    @State private var catsCollapsed: Bool = true
 
     struct SharePayload: Identifiable { let id = UUID(); let items: [Any] }
 
@@ -78,20 +81,21 @@ struct ResultView: View {
             shareButton()
             imageCard()
             headerBar()
-            scoresRow()
+//            scoresRow()
             if let duration = vm.scanDurationDescription {
                 scanDurationRow(duration: duration)
             }
-            kidSafetySection()
-                .id("childrenSection")
-            if vm.includeCats || vm.includeDogs {
-                petSafetySection()
+            if vm.includeChildren {
+                kidSafetySection()
+                    .id("childrenSection")
             }
+            if vm.includeDogs { dogSafetySection().id("dogsSection") }
+            if vm.includeCats { catSafetySection().id("catsSection") }
             // Insert explainability section here if needed
             if hasExplainability {
                 explainabilitySection()
             }
-            dataSourcesSection()
+//            dataSourcesSection()
             timestampFooter()
         }
         .padding(.top, 8)
@@ -188,72 +192,16 @@ struct ResultView: View {
                     )
             }
         }
+        .padding(.vertical, 14)
+        .frame(maxWidth: .infinity)
+        .background(
+            Color.secondary.opacity(0.06)
+                .ignoresSafeArea(edges: .horizontal)
+        )
     }
 
     // MARK: — Score Ring
-    private struct ScoreRing: View {
-        enum LabelPlacement { case below, beside }
-        let title: String
-        let score10: Int  // 0–10
-        let labelPlacement: LabelPlacement
-        let onTap: (() -> Void)?
-        private var progress: Double { min(1.0, max(0.0, Double(score10) / 10.0)) }
-
-        var body: some View {
-            Group {
-                switch labelPlacement {
-                case .below:
-                    VStack(spacing: 6) {
-                        ring
-                        Text("Safety Score")
-                            .font(.caption2)
-                            .foregroundStyle(.secondary)
-                        Text(title)
-                            .font(.footnote).bold()
-                    }
-                    .accessibilityElement(children: .combine)
-                    .accessibilityLabel(Text("\(title) safety score \(score10) out of 10"))
-
-                case .beside:
-                    HStack(spacing: 10) {
-                        ring
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text("Safety Score")
-                                .font(.caption2)
-                                .foregroundStyle(.secondary)
-                            Text(title)
-                                .font(.footnote).bold()
-                        }
-                    }
-                    .accessibilityElement(children: .combine)
-                    .accessibilityLabel(Text("\(title) safety score \(score10) out of 10"))
-                }
-            }
-            .contentShape(Rectangle())
-            .onTapGesture {
-                onTap?()
-            }
-        }
-
-        private var ring: some View {
-            ZStack {
-                Circle()
-                    .trim(from: 0, to: 1)
-                    .stroke(Color.secondary.opacity(0.15), style: StrokeStyle(lineWidth: 10, lineCap: .round))
-                    .rotationEffect(.degrees(-90))
-                    .frame(width: 64, height: 64)
-                Circle()
-                    .trim(from: 0, to: progress)
-                    .stroke(scoreColor(score10), style: StrokeStyle(lineWidth: 10, lineCap: .round))
-                    .rotationEffect(.degrees(-90))
-                    .frame(width: 64, height: 64)
-                Text("\(score10)/10")
-                    .font(.footnote).bold()
-                    .monospacedDigit()
-                    .foregroundColor(scoreColor(score10))
-            }
-        }
-    }
+    
 
     // MARK: — Selected Color Helpers
     private func selectedScore10() -> Int {
@@ -272,26 +220,24 @@ struct ResultView: View {
             VStack(alignment: .leading, spacing: 4) {
                 Text(vm.productName)
                     .font(.title2.bold())
-                    .foregroundColor(.white)
+                    .foregroundColor(.primary)
                 Text(vm.category)
                     .font(.subheadline)
-                    .foregroundColor(.white.opacity(0.8))
+                    .foregroundColor(.secondary)
             }
             Spacer()
             // Scores moved to dedicated row below
         }
-        .padding()
-        .frame(maxWidth: .infinity)
-        .background(
-            LinearGradient(
-                gradient: Gradient(colors: [selectedColor.opacity(0.85), selectedColor]),
-                startPoint: .topLeading,
-                endPoint: .bottomTrailing
-            )
-        )
-        .animation(.easeInOut(duration: 0.25), value: vm.selectedSection)
-        .cornerRadius(12)
         .padding(.horizontal)
+        .frame(maxWidth: .infinity)
+//        .background(
+//            LinearGradient(
+//                gradient: Gradient(colors: [selectedColor.opacity(0.85), selectedColor]),
+//                startPoint: .topLeading,
+//                endPoint: .bottomTrailing
+//            )
+//        )
+        .animation(.easeInOut(duration: 0.25), value: vm.selectedSection)
     }
 
     // MARK: — Scores Row (Kids / Dogs / Cats)
@@ -347,125 +293,78 @@ struct ResultView: View {
         .padding(.horizontal)
     }
 
-    // MARK: — Pet Safety
-    private func petSafetySection() -> some View {
-        VStack(spacing: 8) {
-            VStack(alignment: .center, spacing: 4) {
-                HStack {
-                    Image(systemName: "pawprint.fill")
-                    Text("Pet Safety").font(.headline)
-                }
-                Text("Dog and/or cat specific warnings based on the analysis")
-                    .font(.subheadline)
-                    .foregroundColor(.secondary)
-            }
-            .padding()
-            .frame(maxWidth: .infinity)
-            .background(Color.orange.opacity(0.1))
-            .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
-
-            VStack(alignment: .leading, spacing: 12) {
-                if vm.includeDogs {
-                    petColumn(title: "Dogs", warnings: vm.dogWarnings)
-                        .id("dogsSection")
-                }
-                if vm.includeCats {
-                    petColumn(title: "Cats", warnings: vm.catWarnings)
-                        .id("catsSection")
-                }
-            }
-            .padding([.horizontal, .bottom])
-        }
-        .padding(.horizontal)
-    }
-
-    /// Renders a list of pet warnings with a severity badge.
-    @ViewBuilder
-    private func petColumn(title: String, warnings: [(severity: String, warning: String, reason: String)]) -> some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack(spacing: 8) {
-                Image(systemName: title == "Dogs" ? "dog.fill" : "cat.fill")
-                Text(title).font(.headline)
-                if let maxSeverity = warnings.map({ $0.severity.lowercased() }).max(by: severityLess) {
-                    PetRiskBadge(severity: maxSeverity)
-                }
-                Spacer()
-            }
-
-            if warnings.isEmpty {
-                Text("No specific warnings")
-                    .foregroundStyle(.secondary)
-            } else {
-                ForEach(Array(warnings.enumerated()), id: \.offset) { _, item in
-                    VStack(alignment: .leading, spacing: 4) {
-                        HStack {
-                            Circle().fill(severityColor(item.severity)).frame(width: 8, height: 8)
-                            Text(item.warning).font(.subheadline).bold()
-                        }
-                        Text(item.reason).font(.footnote).foregroundStyle(.secondary)
-                    }
-                    .padding(8)
-                    .background(severityColor(item.severity).opacity(0.08))
-                    .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
-                    .accessibilityElement(children: .combine)
-                }
-            }
-        }
-    }
-
-    private struct PetRiskBadge: View {
-        let severity: String
-        var body: some View {
-            Text(severity.capitalized)
-                .font(.caption).bold()
-                .padding(.horizontal, 8).padding(.vertical, 4)
-                .background(severityColor(severity).opacity(0.15))
-                .foregroundStyle(severityColor(severity))
-                .clipShape(Capsule())
-        }
-    }
 
     // MARK: — Kid Safety
     private func kidSafetySection() -> some View {
-        VStack(spacing: 0) {
-            kidSafetyHeader()
-            kidSafetyList(title: "Kid-Safe Benefits", items: vm.safeBenefits, color: .green)
-            kidSafetyList(title: "Kid Safety Concerns", items: vm.safetyConcerns, color: .red)
-        }
+        let child10 = score10(fromHundred: vm.analysis.childSafetyScore)
+        let narrative = vm.kidNarrative
+        return SafetySectionView(
+            title: "Kid Safety",
+            iconName: "kid_safety",
+            score10: child10,
+            bulletsGood: vm.safeBenefits,
+            bulletsRisk: vm.safetyConcerns,
+            paragraph: narrative,
+            isCollapsed: $kidsCollapsed
+        )
         .padding(.horizontal)
     }
 
-    private func kidSafetyHeader() -> some View {
-        VStack(alignment: .leading, spacing: 4) {
-            HStack {
-                Image(systemName: "person.3.fill")
-                Text("Kid Safety").font(.headline)
-            }
-            Text("Safety analysis focused on children and family use")
-                .font(.subheadline)
-                .foregroundColor(.secondary)
-        }
-        .padding()
-        .frame(maxWidth: .infinity)
-        .background(Color.blue.opacity(0.1))
-        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+    private func dogSafetySection() -> some View {
+        let score = vm.analysis.dogSafetyScore ?? 0
+        let dog10 = score10(fromHundred: score)
+        let pros = vm.dogBenefits
+        let risks = vm.dogConcerns
+        let narrative = vm.dogNarrative
+        return SafetySectionView(
+            title: "Dog Safety",
+            iconName: "dog_safety",
+            score10: dog10,
+            bulletsGood: pros,
+            bulletsRisk: risks,
+            paragraph: narrative,
+            isCollapsed: $dogsCollapsed
+        )
+        .padding(.horizontal)
     }
+
+    private func catSafetySection() -> some View {
+        let score = vm.analysis.catSafetyScore ?? 0
+        let cat10 = score10(fromHundred: score)
+        let pros = vm.catBenefits
+        let risks = vm.catConcerns
+        let narrative = vm.catNarrative
+        return SafetySectionView(
+            title: "Cat Safety",
+            iconName: "cat_safety",
+            score10: cat10,
+            bulletsGood: pros,
+            bulletsRisk: risks,
+            paragraph: narrative,
+            isCollapsed: $catsCollapsed
+        )
+        .padding(.horizontal)
+    }
+
 
     private func kidSafetyList(title: String, items: [String], color: Color) -> some View {
         Group {
             if !items.isEmpty {
                 VStack(alignment: .leading, spacing: 8) {
                     Text("\(title) (\(items.count))")
-                        .font(.headline).foregroundColor(color)
+                        .font(.subheadline).bold()
+                        .foregroundStyle(color)
+                        .padding(.horizontal)
                     ForEach(items, id: \.self) { text in
                         Text(text)
-                            .padding()
+                            .font(.footnote)
+                            .padding(10)
                             .frame(maxWidth: .infinity, alignment: .leading)
-                            .background(color.opacity(0.1))
+                            .background(color.opacity(0.08))
                             .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+                            .padding(.horizontal)
                     }
                 }
-                .padding(.top, 12)
             }
         }
     }
@@ -711,6 +610,167 @@ struct ZoomableImageView: UIViewRepresentable {
         weak var imageView: UIImageView?
         func viewForZooming(in scrollView: UIScrollView) -> UIView? {
             imageView
+        }
+    }
+}
+
+private struct SafetySectionView: View {
+    let title: String
+    let iconName: String
+    let score10: Int
+    let bulletsGood: [String]
+    let bulletsRisk: [String]
+    let paragraph: String?
+    @Binding var isCollapsed: Bool
+
+    private var tint: Color { scoreColor(score10) }
+
+    var body: some View {
+        VStack(spacing: 10) {
+            // Header bar
+            HStack(spacing: 10) {
+                Image(iconName)
+                Text(title).font(.headline)
+                Spacer()
+                Image(systemName: isCollapsed ? "plus" : "minus")
+                    .font(.headline)
+                    .padding(6)
+                    .background(.white.opacity(0.15))
+                    .clipShape(Circle())
+                    .onTapGesture { withAnimation(.easeInOut) { isCollapsed.toggle() } }
+            }
+            .padding(.horizontal)
+            .frame(width: .infinity, height: 55)
+            .background(tint)
+            .foregroundStyle(.white)
+            .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+
+            if !isCollapsed {
+                VStack(alignment: .leading, spacing: 12) {
+                    HStack {
+                        ScoreRing(title: "Safety score", score10: score10, labelPlacement: .beside, onTap: nil)
+                            .padding(.leading, 10)
+                        Spacer()
+                    }
+                    .padding(.top, 20)
+                    .padding(.leading, 15)
+                    
+                    if !bulletsGood.isEmpty {
+                        VStack(alignment: .leading, spacing: 8) {
+                            ForEach(bulletsGood, id: \.self) { t in
+                                HStack(alignment: .top, spacing: 8) {
+                                    Image(systemName: "triangle.fill").rotationEffect(.degrees(90))
+                                        .font(.caption)
+                                        .foregroundStyle(Color.green)
+                                    Text(t).font(.subheadline).bold()
+                                }
+                            }
+                        }
+                        .padding(.horizontal)
+                        .padding(.vertical)
+                    }
+
+                    if !bulletsRisk.isEmpty {
+                        VStack(alignment: .leading, spacing: 8) {
+                            ForEach(bulletsRisk, id: \.self) { t in
+                                HStack(alignment: .top, spacing: 8) {
+                                    Image(systemName: "triangle.fill")
+                                        .font(.caption)
+                                        .foregroundStyle(Color.red)
+                                    Text(t).font(.subheadline)
+                                }
+                            }
+                        }
+                        .padding(.horizontal)
+                        .padding(.vertical)
+                    }
+
+                    if let paragraph, !paragraph.isEmpty {
+                        Text(paragraph)
+                            .font(.footnote)
+                            .foregroundStyle(.secondary)
+                            .padding(.horizontal)
+                            .padding(.bottom, 8)
+                    }
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(tint.opacity(0.12))
+                .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 10, style: .continuous)
+                        .stroke(tint.opacity(0.25), lineWidth: 1)
+                )
+            }
+        }
+    }
+}
+
+struct ScoreRing: View {
+    enum LabelPlacement { case below, beside }
+
+    let title: String               // e.g. "Safety Score"
+    let score10: Int               // 0–10
+    let labelPlacement: LabelPlacement
+    let onTap: (() -> Void)?
+
+    // Styling knobs
+    var diameter: CGFloat = 45      // make it chunky & bigger
+    var thickness: CGFloat = 12
+
+    private var progress: Double { min(1.0, max(0.0, Double(score10) / 10.0)) }
+    private var tint: Color { scoreColor(score10) }
+
+    var body: some View {
+        Group {
+            switch labelPlacement {
+            case .beside:
+                HStack(spacing: 14) {
+                    ring
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("\(score10)/10")
+                            .font(.system(size: 18, weight: .bold, design: .rounded))
+                            .monospacedDigit()
+                        Text(title)
+                            .font(.subheadline)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+                .accessibilityElement(children: .combine)
+                .accessibilityLabel(Text("\(title) \(score10) out of 10"))
+
+            case .below:
+                VStack(spacing: 8) {
+                    ring
+                    Text("\(score10)/10")
+                        .font(.headline).bold()
+                        .monospacedDigit()
+                    Text(title)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+                .accessibilityElement(children: .combine)
+                .accessibilityLabel(Text("\(title) \(score10) out of 10"))
+            }
+        }
+        .contentShape(Rectangle())
+        .onTapGesture { onTap?() }
+    }
+
+    private var ring: some View {
+        ZStack {
+            // Background track (pale tint)
+            Circle()
+                .trim(from: 0, to: 1)
+                .stroke(tint.opacity(0.18), style: StrokeStyle(lineWidth: thickness, lineCap: .round))
+                .rotationEffect(.degrees(-90))
+                .frame(width: diameter, height: diameter)
+
+            // Foreground progress
+            Circle()
+                .trim(from: 0, to: progress)
+                .stroke(tint, style: StrokeStyle(lineWidth: thickness, lineCap: .round))
+                .rotationEffect(.degrees(-90))
+                .frame(width: diameter, height: diameter)
         }
     }
 }

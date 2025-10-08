@@ -8,6 +8,7 @@
 
 import SwiftUI
 import UIKit
+import Foundation
 
 // MARK: — ViewModel
 final class RecognitionResultViewModel: ObservableObject, Identifiable {
@@ -46,27 +47,100 @@ final class RecognitionResultViewModel: ObservableObject, Identifiable {
     // Keep the structured response
     let analysis: SafetyAnalysisResponse
 
+    // Optional UI-focused DTO from Gemini/Coordinator (preferred for display)
+    let dto: GeminiSafetyDTO?
+
     // User toggles
     let includeDogs: Bool
     let includeCats: Bool
+    let includeChildren: Bool = true
 
     // Derived lists for UI
-    var safeBenefits: [String] { analysis.generalSafety.pros.map { $0.label } }
-    var safetyConcerns: [String] { analysis.generalSafety.cons.map { $0.label } }
-    var dataSources: [String] { analysis.recalls.map { $0.source } }
+    var safeBenefits: [String] {
+        let items = dto?.kidPros ?? analysis.kidPros
+        let cleaned = items.map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }.filter { !$0.isEmpty }
+        return Array(cleaned.prefix(3))
+    }
+    var safetyConcerns: [String] {
+        let items = dto?.kidCons ?? analysis.kidCons
+        let cleaned = items.map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }.filter { !$0.isEmpty }
+        return Array(cleaned.prefix(3))
+    }
+    var kidNarrative: String? {
+        let text = dto?.kidNarrative ?? analysis.kidNarrative
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmed.isEmpty ? nil : trimmed
+    }
+
+    var dogBenefits: [String] {
+        let values = dto?.dogPros ?? analysis.dogPros ?? []
+        let cleaned = values.map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }.filter { !$0.isEmpty }
+        return Array(cleaned.prefix(3))
+    }
+    var dogConcerns: [String] {
+        let values = dto?.dogCons ?? analysis.dogCons ?? []
+        let cleaned = values.map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }.filter { !$0.isEmpty }
+        if !cleaned.isEmpty { return Array(cleaned.prefix(3)) }
+        return Array(dogWarnings.map { $0.warning }.prefix(3))
+    }
+    var dogNarrative: String? {
+        let text = dto?.dogNarrative ?? analysis.dogNarrative
+        let trimmed = text?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        if !trimmed.isEmpty { return trimmed }
+        let reasons = dogWarnings.map { $0.reason }.filter { !$0.isEmpty }
+        if reasons.isEmpty { return nil }
+        let deduped = (Array(NSOrderedSet(array: reasons)) as? [String]) ?? reasons
+        return deduped.prefix(3).joined(separator: " ")
+    }
+
+    var catBenefits: [String] {
+        let values = dto?.catPros ?? analysis.catPros ?? []
+        let cleaned = values.map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }.filter { !$0.isEmpty }
+        return Array(cleaned.prefix(3))
+    }
+    var catConcerns: [String] {
+        let values = dto?.catCons ?? analysis.catCons ?? []
+        let cleaned = values.map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }.filter { !$0.isEmpty }
+        if !cleaned.isEmpty { return Array(cleaned.prefix(3)) }
+        return Array(catWarnings.map { $0.warning }.prefix(3))
+    }
+    var catNarrative: String? {
+        let text = dto?.catNarrative ?? analysis.catNarrative
+        let trimmed = text?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        if !trimmed.isEmpty { return trimmed }
+        let reasons = catWarnings.map { $0.reason }.filter { !$0.isEmpty }
+        if reasons.isEmpty { return nil }
+        let deduped = (Array(NSOrderedSet(array: reasons)) as? [String]) ?? reasons
+        return deduped.prefix(3).joined(separator: " ")
+    }
+    var dataSources: [String] {
+        if let dto, !dto.dataSources.isEmpty { return dto.dataSources }
+        return analysis.recalls.map { $0.source }
+    }
 
     // Pet warnings unpacked for convenience
     var dogWarnings: [(severity: String, warning: String, reason: String)] {
-        analysis.petSafety.dogs.map { ($0.severity.rawValue, $0.warning, $0.reason) }
+        if let dto, !dto.dogWarnings.isEmpty {
+            return dto.dogWarnings.map { ($0.severity, $0.title, $0.reason) }
+        }
+        return analysis.petSafety.dogs.map { ($0.severity.rawValue, $0.warning, $0.reason) }
     }
     var catWarnings: [(severity: String, warning: String, reason: String)] {
-        analysis.petSafety.cats.map { ($0.severity.rawValue, $0.warning, $0.reason) }
+        if let dto, !dto.catWarnings.isEmpty {
+            return dto.catWarnings.map { ($0.severity, $0.title, $0.reason) }
+        }
+        return analysis.petSafety.cats.map { ($0.severity.rawValue, $0.warning, $0.reason) }
     }
 
     // Explainability (UI-only; not persisted in schema)
     @Published var canonicalCategory: String?
     @Published var rulesTriggered: [String] = []
     @Published var evidence: SafetyEvidence = .init(labels: [], ocrHits: [])
+
+    // Optional confidences (0–100) surfaced in UI
+    @Published var childConfidence: Int? = nil
+    @Published var dogConfidence: Int? = nil
+    @Published var catConfidence: Int? = nil
 
     // MARK: — Scores
     /// The overall score (0–100) to display, driven by the user's selected focus.
@@ -100,7 +174,8 @@ final class RecognitionResultViewModel: ObservableObject, Identifiable {
         scanDurationDescription: String? = nil,
         canonicalCategory: String? = nil,
         rulesTriggered: [String] = [],
-        evidence: SafetyEvidence = .init(labels: [], ocrHits: [])
+        evidence: SafetyEvidence = .init(labels: [], ocrHits: []),
+        dto: GeminiSafetyDTO? = nil
     ) {
         self.image = image
         self.productName = productName
@@ -114,6 +189,11 @@ final class RecognitionResultViewModel: ObservableObject, Identifiable {
         self.canonicalCategory = canonicalCategory
         self.rulesTriggered = rulesTriggered
         self.evidence = evidence
+        self.dto = dto
+        // Surface confidences from DTO when present
+        self.childConfidence = dto?.childConfidence
+        self.dogConfidence = dto?.dogConfidence
+        self.catConfidence = dto?.catConfidence
 
         // Build a stable per-analysis key without mutating the server schema.
         self.selectionKey = Self.makeSelectionKey(for: analysis)

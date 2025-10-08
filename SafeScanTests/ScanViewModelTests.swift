@@ -40,7 +40,16 @@ final class ScanViewModelTests: XCTestCase {
             generalSafety: general,
             petSafety: petWarnings,
             hygieneWarnings: [],
-            recalls: []
+            recalls: [],
+            kidPros: ["Rich in fibre"],
+            kidCons: ["High sugar"],
+            kidNarrative: "Mock child narrative",
+            dogPros: includeDogs ? ["Offer only as treat", "Provide water", "Observe energy levels"] : nil,
+            dogCons: includeDogs ? ["Contains xylitol", "High sugar", "Loose stool risk"] : nil,
+            dogNarrative: includeDogs ? "Mock dog narrative" : nil,
+            catPros: includeCats ? ["Serve tiny nibble", "Monitor appetite", "Consult vet"] : nil,
+            catCons: includeCats ? ["Artificial sweetener risk", "High sugar", "Possible vomiting"] : nil,
+            catNarrative: includeCats ? "Mock cat narrative" : nil
         )
 
         return ScanHistoryItem(

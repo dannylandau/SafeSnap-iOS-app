@@ -103,7 +103,16 @@ final class ScanAnalysisCoordinatorTests: XCTestCase {
             generalSafety: general,
             petSafety: pet,
             hygieneWarnings: [],
-            recalls: []
+            recalls: [],
+            kidPros: ["High fibre"],
+            kidCons: ["High sugar"],
+            kidNarrative: "Mock child narrative",
+            dogPros: ["Offer sparingly", "Serve with water", "Check label for xylitol"],
+            dogCons: ["Contains xylitol", "High sugar load", "Possible GI upset"],
+            dogNarrative: "Mock dog narrative",
+            catPros: ["Provide alternative treats", "Consult vet first", "Keep portions minimal"],
+            catCons: ["Sweeteners upset cats", "High sugar", "Potential digestive distress"],
+            catNarrative: "Mock cat narrative"
         )
         let extras = AnalysisExtras(
             evidence: SafetyEvidence(labels: ["snack"], ocrHits: ["Fruit Snack"]),
