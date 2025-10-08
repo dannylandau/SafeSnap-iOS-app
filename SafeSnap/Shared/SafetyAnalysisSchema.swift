@@ -24,7 +24,16 @@ enum SafetyAnalysisSchema {
                 "generalSafety",
                 "petSafety",
                 "hygieneWarnings",
-                "recalls"
+                "recalls",
+                "kidPros",
+                "kidCons",
+                "kidNarrative",
+                "dogPros",
+                "dogCons",
+                "dogNarrative",
+                "catPros",
+                "catCons",
+                "catNarrative"
             ],
             "properties": [
                 "productName": ["type": "STRING"],
@@ -130,6 +139,51 @@ enum SafetyAnalysisSchema {
                             "source":  ["type": "STRING"]
                         ]
                     ]
+                ],
+
+                // Child-focused explainers
+                "kidPros": [
+                    "type": "ARRAY",
+                    "items": ["type": "STRING"],
+                    "minItems": 1
+                ],
+                "kidCons": [
+                    "type": "ARRAY",
+                    "items": ["type": "STRING"],
+                    "minItems": 1
+                ],
+                "kidNarrative": [
+                    "type": "STRING"
+                ],
+
+                // Pet explainability (nullable when pet analysis disabled)
+                "dogPros": [
+                    "type": "ARRAY",
+                    "items": ["type": "STRING"],
+                    "nullable": true
+                ],
+                "dogCons": [
+                    "type": "ARRAY",
+                    "items": ["type": "STRING"],
+                    "nullable": true
+                ],
+                "dogNarrative": [
+                    "type": "STRING",
+                    "nullable": true
+                ],
+                "catPros": [
+                    "type": "ARRAY",
+                    "items": ["type": "STRING"],
+                    "nullable": true
+                ],
+                "catCons": [
+                    "type": "ARRAY",
+                    "items": ["type": "STRING"],
+                    "nullable": true
+                ],
+                "catNarrative": [
+                    "type": "STRING",
+                    "nullable": true
                 ]
             ]
         ]

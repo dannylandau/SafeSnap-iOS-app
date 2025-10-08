@@ -57,7 +57,10 @@ final class AccountViewModelTests: XCTestCase {
             generalSafety: .init(pros: [], cons: []),
             petSafety: .init(dogs: [], cats: []),
             hygieneWarnings: [],
-            recalls: []
+            recalls: [],
+            kidPros: ["Tastes good"],
+            kidCons: ["High sugar"],
+            kidNarrative: "Mock narrative"
         )
 
         return ScanHistoryItem(

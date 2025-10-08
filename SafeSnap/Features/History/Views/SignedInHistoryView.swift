@@ -226,7 +226,7 @@ struct SignedInHistoryView: View {
         let stem = url.deletingPathExtension().lastPathComponent
         let thumbName = stem + "_thumb.jpg"
         return dir.appendingPathComponent(thumbName)
-    }
+    } 
     
     private func loadImage(from url: URL?) -> UIImage? {
         guard let url = url else { return nil }

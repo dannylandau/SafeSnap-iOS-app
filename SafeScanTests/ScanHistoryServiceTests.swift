@@ -32,7 +32,16 @@ final class ScanHistoryServiceTests: XCTestCase {
             generalSafety: general,
             petSafety: petWarnings,
             hygieneWarnings: [],
-            recalls: []
+            recalls: [],
+            kidPros: ["Nutritious"],
+            kidCons: ["Sugary"],
+            kidNarrative: "Mock narrative",
+            dogPros: ["Offer sparingly", "Pair with water", "Observe for symptoms"],
+            dogCons: ["Contains sugar", "Monitor weight", "Possible hyperactivity"],
+            dogNarrative: "Mock dog narrative",
+            catPros: ["Rare treat only", "Tiny nibble portions", "Monitor litter habits"],
+            catCons: ["Too much sugar", "No cat benefit", "Potential diarrhea"],
+            catNarrative: "Mock cat narrative"
         )
     }
 

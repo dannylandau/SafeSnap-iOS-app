@@ -170,6 +170,7 @@ final class ScanAnalysisCoordinator: ObservableObject {
     private var runningTask: Task<SafetyAnalysisResponse, Error>? = nil
     
     @Published var latestHistoryItem: ScanHistoryItem?
+    @Published var resultDTO: GeminiSafetyDTO? = nil
     @Published var explainability: AnalysisExtras? = nil
     
     convenience init(geminiService: GeminiService, visionService: VisionServiceType, historyService: ScanHistoryService) {
@@ -195,11 +196,10 @@ final class ScanAnalysisCoordinator: ObservableObject {
         fastDuration = nil
         smartDuration = nil
         let visionStart = ContinuousClock.now
-        let visionResult: VisionAnalysisResult
-        do {
-            visionResult = try await visionService.analyze(image: image)
-        } catch {
-            throw ScanError.visionFailed(reason: error.localizedDescription, underlying: error)
+        // Run Vision off-main to avoid blocking UI presentation.
+        let vs = visionService
+        let visionResult: VisionAnalysisResult = try await offMain {
+            try await vs.analyze(image: image)
         }
         visionGuess = visionResult.guess
         visionDuration = seconds(visionStart.duration(to: ContinuousClock.now))
@@ -238,8 +238,91 @@ final class ScanAnalysisCoordinator: ObservableObject {
         self.stage = .smart
         self.smartDuration = fastDuration
 
+        // Build a lightweight DTO for the ResultView/VM
+        let childConf = Int((result.modelConfidence * 100.0).rounded()).clamped(to: 0...100)
+        if result.kidPros.isEmpty || result.kidCons.isEmpty {
+            print("ScanAnalysisCoordinator warning: kidPros/kidCons empty; check Gemini prompt.")
+        }
+        if result.kidNarrative.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            print("ScanAnalysisCoordinator warning: kidNarrative empty; check Gemini prompt.")
+        }
+        let kidPros = result.kidPros
+        let kidCons = result.kidCons
+        let kidNarrativeTrimmed = result.kidNarrative.trimmingCharacters(in: .whitespacesAndNewlines)
+        let kidNarrative = kidNarrativeTrimmed.isEmpty ? nil : kidNarrativeTrimmed
+
+        func cleaned(_ values: [String]?) -> [String] {
+            guard let values else { return [] }
+            let trimmed = values.map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }.filter { !$0.isEmpty }
+            return Array(trimmed.prefix(3))
+        }
+
+        let dogPros: [String]
+        let dogCons: [String]
+        let dogNarrative: String?
+        if options.includeDogs {
+            dogPros = cleaned(result.dogPros)
+            dogCons = cleaned(result.dogCons)
+            let narrative = result.dogNarrative?.trimmingCharacters(in: .whitespacesAndNewlines)
+            dogNarrative = narrative?.isEmpty == true ? nil : narrative
+            if dogPros.isEmpty || dogCons.isEmpty || dogNarrative == nil {
+                print("ScanAnalysisCoordinator warning: dog explainability incomplete; check Gemini prompt.")
+            }
+        } else {
+            dogPros = []
+            dogCons = []
+            dogNarrative = nil
+        }
+
+        let catPros: [String]
+        let catCons: [String]
+        let catNarrative: String?
+        if options.includeCats {
+            catPros = cleaned(result.catPros)
+            catCons = cleaned(result.catCons)
+            let narrative = result.catNarrative?.trimmingCharacters(in: .whitespacesAndNewlines)
+            catNarrative = narrative?.isEmpty == true ? nil : narrative
+            if catPros.isEmpty || catCons.isEmpty || catNarrative == nil {
+                print("ScanAnalysisCoordinator warning: cat explainability incomplete; check Gemini prompt.")
+            }
+        } else {
+            catPros = []
+            catCons = []
+            catNarrative = nil
+        }
+        let dogWarns = result.petSafety.dogs.map { GeminiSafetyDTO.PetWarn(severity: $0.severity.rawValue, title: $0.warning, reason: $0.reason) }
+        let catWarns = result.petSafety.cats.map { GeminiSafetyDTO.PetWarn(severity: $0.severity.rawValue, title: $0.warning, reason: $0.reason) }
+        let dto = GeminiSafetyDTO(
+            productName: result.productName ?? visionResult.guess.name,
+            canonicalCategory: analyzed.extras.policy.canonicalCategory,
+            childScore: result.childSafetyScore,
+            dogScore: result.dogSafetyScore,
+            catScore: result.catSafetyScore,
+            childConfidence: childConf,
+            dogConfidence: nil,
+            catConfidence: nil,
+            kidPros: kidPros,
+            kidCons: kidCons,
+            kidNarrative: kidNarrative,
+            dogPros: dogPros,
+            dogCons: dogCons,
+            dogNarrative: dogNarrative,
+            catPros: catPros,
+            catCons: catCons,
+            catNarrative: catNarrative,
+            dogWarnings: dogWarns,
+            catWarnings: catWarns,
+            labels: analyzed.extras.evidence.labels,
+            ocrHits: analyzed.extras.evidence.ocrHits,
+            rulesTriggered: analyzed.extras.policy.rulesTriggered,
+            dataSources: ["Google Vision", "Google Gemini"]
+        )
+        self.resultDTO = dto
+
         // Persist image and build history item
-        let imageData: Data = image.jpegData(compressionQuality: 0.9) ?? Data()
+        let imageData: Data = try await offMain {
+            image.jpegData(compressionQuality: 0.9) ?? Data()
+        }
         self.safetyAnalysis = result
 
         // Map options to history toggles
@@ -288,6 +371,13 @@ final class ScanAnalysisCoordinator: ObservableObject {
         currentPhase = .preparing
     }
 
+    // Run async work on a detached, background-priority task and return to caller.
+    private func offMain<T>(_ work: @escaping () async throws -> T) async throws -> T {
+        return try await Task.detached(priority: .userInitiated) {
+            try await work()
+        }.value
+    }
+
     private func seconds(_ duration: Duration) -> Double {
         let components = duration.components
         let attosecondsPerSecond = 1_000_000_000_000_000_000.0
@@ -301,5 +391,12 @@ final class ScanAnalysisCoordinator: ObservableObject {
             .components(separatedBy: separators)
             .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
             .filter { !$0.isEmpty }
+    }
+}
+
+// MARK: - Helpers
+private extension Int {
+    func clamped(to range: ClosedRange<Int>) -> Int {
+        Swift.max(range.lowerBound, Swift.min(self, range.upperBound))
     }
 }

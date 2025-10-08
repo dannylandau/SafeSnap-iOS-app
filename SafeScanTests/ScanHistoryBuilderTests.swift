@@ -71,7 +71,16 @@ final class ScanHistoryBuilderTests: XCTestCase {
             generalSafety: .init(pros: pros, cons: cons),
             petSafety: .init(dogs: [], cats: []),
             hygieneWarnings: [],
-            recalls: []
+            recalls: [],
+            kidPros: ["High fibre"],
+            kidCons: ["High sugar"],
+            kidNarrative: "Mock narrative",
+            dogPros: ["Serve with water", "Offer only occasionally", "Watch for sugar crashes"],
+            dogCons: ["High sugar", "Possible choking risk", "Artificial flavors irritate"],
+            dogNarrative: "Mock dog narrative",
+            catPros: ["Only as rare treat", "Break into tiny pieces", "Monitor appetite"],
+            catCons: ["Sugar overload", "No nutritional value", "Possible vomiting"],
+            catNarrative: "Mock cat narrative"
         )
     }
 
