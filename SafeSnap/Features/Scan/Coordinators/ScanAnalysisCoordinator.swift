@@ -355,7 +355,7 @@ final class ScanAnalysisCoordinator: ObservableObject {
             imageData: imageData,
             userToggles: toggles,
             visionContextRef: nil,
-            model: "gemini-1.5-flash",
+            model: "gemini-2.5-flash-lite",
             promptVersion: "v1-gemini"
         )
         self.historyService.add(item)
