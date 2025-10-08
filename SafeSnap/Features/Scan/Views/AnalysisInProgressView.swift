@@ -12,6 +12,11 @@ struct AnalysisInProgressView: View {
     @State private var observedVisionDuration: Double?
     @State private var observedFastDuration: Double?
     @State private var observedSmartDuration: Double?
+#if DEBUG
+    @State private var stopwatchStartDate = Date()
+    @State private var elapsedSeconds: TimeInterval = 0
+    @State private var stopwatchCancellable: AnyCancellable?
+#endif
     let errorMessage: String?
 
     init(image: UIImage?, viewModel: ScanViewModel, errorMessage: String? = nil) {
@@ -113,6 +118,9 @@ struct AnalysisInProgressView: View {
                             AIBreathingIndicator(size: 88)
                             Spacer()
                         }
+#if DEBUG
+                        stopwatchView
+#endif
                         stepProgress
                     }
                     .padding(16)
@@ -171,6 +179,18 @@ struct AnalysisInProgressView: View {
             .onReceive(visionDurationPublisher) { observedVisionDuration = $0 }
             .onReceive(fastDurationPublisher) { observedFastDuration = $0 }
             .onReceive(smartDurationPublisher) { observedSmartDuration = $0 }
+#if DEBUG
+            .onReceive(viewModel.$phase.removeDuplicates()) { phase in
+                switch phase {
+                case .result, .error:
+                    stopStopwatch()
+                default:
+                    break
+                }
+            }
+            .onAppear { startStopwatch() }
+            .onDisappear { stopStopwatch() }
+#endif
         }
     }
     
@@ -231,6 +251,53 @@ struct AnalysisInProgressView: View {
             }
         }
     }
+
+#if DEBUG
+    private var stopwatchView: some View {
+        HStack(spacing: 6) {
+            Image(systemName: "timer")
+                .foregroundStyle(.secondary)
+                .font(.caption)
+            Text(formattedElapsed)
+                .font(.caption.monospacedDigit().weight(.semibold))
+                .foregroundStyle(.secondary)
+        }
+        .frame(maxWidth: .infinity, alignment: .center)
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("Elapsed time")
+        .accessibilityValue(formattedElapsedSpoken)
+    }
+
+    private func startStopwatch() {
+        stopwatchStartDate = Date()
+        elapsedSeconds = 0
+        stopwatchCancellable?.cancel()
+        stopwatchCancellable = Timer.publish(every: 0.1, on: .main, in: .common)
+            .autoconnect()
+            .sink { now in
+                elapsedSeconds = now.timeIntervalSince(stopwatchStartDate)
+            }
+    }
+
+    private func stopStopwatch() {
+        stopwatchCancellable?.cancel()
+        stopwatchCancellable = nil
+    }
+
+    private var formattedElapsed: String {
+        String(format: "%.1fs", elapsedSeconds)
+    }
+
+    private var formattedElapsedSpoken: String {
+        String(format: "%.1f seconds", elapsedSeconds)
+    }
+#else
+    private var stopwatchView: some View { EmptyView() }
+    private func startStopwatch() {}
+    private func stopStopwatch() {}
+    private var formattedElapsed: String { "" }
+    private var formattedElapsedSpoken: String { "" }
+#endif
 
     private var stagePublisher: AnyPublisher<SafetyAnalyzer.Stage, Never> {
         concreteCoordinator?.$stage.eraseToAnyPublisher() ?? Empty<SafetyAnalyzer.Stage, Never>().eraseToAnyPublisher()

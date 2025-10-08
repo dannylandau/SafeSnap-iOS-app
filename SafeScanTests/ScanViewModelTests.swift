@@ -63,7 +63,7 @@ final class ScanViewModelTests: XCTestCase {
             confidence: 0.9,
             visionContextRef: nil,
             analysis: analysis,
-            model: "gemini-1.5-flash",
+            model: "gemini-2.5-flash-lite",
             promptVersion: "v1",
             appVersion: "1.0"
         )
