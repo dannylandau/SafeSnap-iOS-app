@@ -17,6 +17,7 @@ final class AppDependencies {
     let visionService: VisionService
     let openAIService: OpenAIService
     let userSession: UserSession
+    let onboardingState: OnboardingStateStore
     init(userSession: UserSession) {
         self.geminiService = GeminiService(apiKey: Bundle.main.infoDictionaryValue(for: "GoogleGeminiAPIKey")!)
         self.historyService = ScanHistoryService()
@@ -24,6 +25,7 @@ final class AppDependencies {
         self.userSession = userSession
         self.openAIService = OpenAIService(apiKey: Bundle.main.infoDictionaryValue(for: "OpenAIAPIKey")!) // TODO: Handle missing key gracefully
         self.visionService = VisionService(apiKey: Bundle.main.infoDictionaryValue(for: "GoogleVisionAPIKey")!) // TODO: Handle missing key gracefully
+        self.onboardingState = OnboardingStateStore()
     }
 
     convenience init(auth: Auth = Auth.auth()) {

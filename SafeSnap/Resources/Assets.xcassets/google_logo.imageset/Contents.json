@@ -1,0 +1,12 @@
+{
+  "images" : [
+    {
+      "filename" : "logo googleg 48dp.pdf",
+      "idiom" : "universal"
+    }
+  ],
+  "info" : {
+    "author" : "xcode",
+    "version" : 1
+  }
+}

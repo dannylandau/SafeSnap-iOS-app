@@ -15,10 +15,11 @@ final class FirebaseAuthViewModel: ObservableObject {
         self.auth = auth
     }
 
-    func signInWithGoogle(presenting presenter: UIViewController?) async {
+    @discardableResult
+    func signInWithGoogle(presenting presenter: UIViewController?) async -> Bool {
         guard let presenter else {
             errorMessage = "Unable to present Google Sign-In. Please try again."
-            return
+            return false
         }
 
         isLoading = true
@@ -30,8 +31,10 @@ final class FirebaseAuthViewModel: ObservableObject {
             authUIDelegate = FirebaseAuthUIDelegate(presenting: presenter)
             let credential = try await fetchCredential(using: provider)
             _ = try await signIn(with: credential)
+            return true
         } catch {
             errorMessage = error.localizedDescription
+            return false
         }
     }
 
