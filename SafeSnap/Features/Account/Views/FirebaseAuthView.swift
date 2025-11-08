@@ -27,35 +27,15 @@ struct FirebaseAuthView: View {
                     .frame(maxWidth: .infinity, alignment: .leading)
             }
 
-            Button {
+            GoogleSignInButton(
+                title: "Continue with Google",
+                isLoading: viewModel.isLoading
+            ) {
                 Task {
                     let presenter = UIApplication.safesnapKeyWindow?.rootViewController?.topMostViewController
-                    await viewModel.signInWithGoogle(presenting: presenter)
+                    _ = await viewModel.signInWithGoogle(presenting: presenter)
                 }
-            } label: {
-                HStack(spacing: 12) {
-                    Image(systemName: "globe")
-                        .font(.title3)
-
-                    Text(viewModel.isLoading ? "Signing in…" : "Continue with Google")
-                        .fontWeight(.semibold)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-
-                    if viewModel.isLoading {
-                        ProgressView()
-                            .progressViewStyle(.circular)
-                    }
-                }
-                .padding()
-                .background(Color.white)
-                .foregroundColor(.black)
-                .overlay(
-                    RoundedRectangle(cornerRadius: 12)
-                        .stroke(Color.gray.opacity(0.2), lineWidth: 1)
-                )
-                .cornerRadius(12)
             }
-            .disabled(viewModel.isLoading)
 
             Spacer()
         }
