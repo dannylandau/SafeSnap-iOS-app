@@ -32,29 +32,50 @@ struct ScanView: View {
     @AppStorage("includeDogSafety") private var includeDog = false
     @AppStorage("includeCatSafety") private var includeCat = false
     @State private var activeSheet: ActiveSheet? = nil
-    @State private var showPetOptions = false
     @State private var selectedPhoto: PhotosPickerItem?
+    @State private var isPhotoPickerPresented = false
+    private let userSession: UserSession
+    private let onShowHistory: () -> Void
+    private let onShowAccount: () -> Void
     
-    init(viewModel: ScanViewModel) {
+    init(
+        viewModel: ScanViewModel,
+        userSession: UserSession,
+        onShowHistory: @escaping () -> Void,
+        onShowAccount: @escaping () -> Void
+    ) {
         _viewModel = StateObject(wrappedValue: viewModel)
+        self.userSession = userSession
+        self.onShowHistory = onShowHistory
+        self.onShowAccount = onShowAccount
     }
     
     var body: some View {
-        ZStack {
-            ScrollView(showsIndicators: false) {
-                VStack(spacing: 24) {
-                    scanLogo
-                    scanTitles
-                    scanStatusBadge
-                    scanCategoryPills
-                    scanActions
-                    scanPhotoPicker
-                    scanInstructions
-                    petSafetyAccordion
+        ZStack(alignment: .bottom) {
+            Color(uiColor: .systemGray6)
+                .ignoresSafeArea()
+
+            VStack(spacing: 0) {
+                ScrollView(showsIndicators: false) {
+                    VStack(spacing: 12) {
+                        ScanHeroHeaderView(
+                            userSession: userSession,
+                            categories: ScanCategory.homeDefaults,
+                            onHistory: onShowHistory,
+                            onAccount: onShowAccount
+                        )
+
+                        PetSafetyCard(includeDog: $includeDog, includeCat: $includeCat)
 #if DEBUG
-                    debugControls
+                        debugControls
 #endif
+                    }
                 }
+
+                ScanBottomControlsView(
+                    onCapture: { activeSheet = .camera },
+                    onGallery: { isPhotoPickerPresented = true }
+                )
             }
         }
         // Camera Sheet
@@ -85,82 +106,9 @@ struct ScanView: View {
             ResultView(vm: vm)
         }
         .alerts(using: viewModel.alerts)
-    }
-    
-    // Computed property to check if the current phase is analyzing
-    // (moved to ScanPhase extension below)
-    
-    private var scanLogo: some View {
-        Circle()
-            .fill(LinearGradient(
-                gradient: Gradient(colors: [Color.green, Color.blue]),
-                startPoint: .topLeading,
-                endPoint: .bottomTrailing
-            ))
-            .frame(width: 100, height: 100)
-            .overlay(
-                Image(systemName: "viewfinder")
-                    .font(.system(size: 40, weight: .bold))
-                    .foregroundColor(.white)
-            )
-            .shadow(color: Color.black.opacity(0.15), radius: 10, x: 0, y: 4)
-    }
-    
-    private var scanTitles: some View {
-        VStack(spacing: 4) {
-            Text("SafeSnap").font(.largeTitle.bold())
-            Text("AI-powered product safety analysis")
-                .font(.subheadline)
-                .foregroundColor(.secondary)
-        }
-    }
-    
-    private var scanStatusBadge: some View {
-        Label("Google Vision Active", systemImage: "eye")
-            .padding(.horizontal, 16)
-            .padding(.vertical, 8)
-            .background(Color.green.opacity(0.15))
-            .foregroundColor(.green)
-            .clipShape(Capsule())
-    }
-    
-    private var scanCategoryPills: some View {
-        WrapPillsView(pills: PillData.default).padding(.horizontal)
-    }
-    
-    private var scanActions: some View {
-        Button {
-            activeSheet = .camera
-        } label: {
-            Label("Scan Product", systemImage: "camera")
-                .font(.headline)
-                .frame(maxWidth: .infinity)
-                .padding()
-                .background(Color.accentColor)
-                .foregroundColor(.white)
-                .cornerRadius(16)
-        }
-        .padding(.horizontal)
-    }
-    
-    private var scanPhotoPicker: some View {
-        PhotosPicker(
-            selection: $selectedPhoto,
-            matching: .images,
-            preferredItemEncoding: .automatic
-        ) {
-            Label("Choose from Photos", systemImage: "photo.on.rectangle.angled")
-                .font(.headline)
-                .frame(maxWidth: .infinity)
-                .padding()
-                .background(Color.blue)
-                .foregroundColor(.white)
-                .cornerRadius(16)
-        }
-        .padding(.horizontal)
-        .onChange(of: selectedPhoto) { oldItem, newItem in
+        .photosPicker(isPresented: $isPhotoPickerPresented, selection: $selectedPhoto, matching: .images)
+        .onChange(of: selectedPhoto) { _, newItem in
             guard let item = newItem else {
-                print("⚠️ selectedPhoto is nil — likely user cancelled or selection failed")
                 return
             }
 
@@ -169,47 +117,22 @@ struct ScanView: View {
                     if let data = try await item.loadTransferable(type: Data.self),
                        let image = UIImage(data: data) {
                         viewModel.beginScan(with: data, uiImage: image, includeDog: includeDog, includeCat: includeCat, includeChildren: false)
-                    } else {
-                        print("No image data found")
                     }
                 } catch {
                     print("Failed to load photo: \(error.localizedDescription)")
                 }
-                // Important: reset selection so the same asset can be picked again next time
-                await MainActor.run { selectedPhoto = nil }
-            }
-        }
-    }
-    
-    private var scanInstructions: some View {
-        Text("Take a photo or choose from your photo gallery")
-            .font(.footnote)
-            .multilineTextAlignment(.center)
-            .foregroundColor(.secondary)
-    }
-    
-    private var petSafetyAccordion: some View {
-        VStack(spacing: 0) {
-            Button {
-                withAnimation { showPetOptions.toggle() }
-            } label: {
-                HStack {
-                    Image(systemName: "gearshape.fill").foregroundColor(.pink)
-                    Text("Pet Safety Analysis").font(.headline)
-                    Spacer()
-                    Image(systemName: showPetOptions ? "chevron.up" : "chevron.down")
-                        .foregroundColor(.secondary)
+                await MainActor.run {
+                    selectedPhoto = nil
+                    isPhotoPickerPresented = false
                 }
-                .padding()
-                .background(Color.secondary.opacity(0.1))
-                .cornerRadius(12)
-            }
-            if showPetOptions {
-                PetOptionsView(includeDog: $includeDog, includeCat: $includeCat)
             }
         }
-        .padding(.bottom, 40)
     }
+    
+    // Computed property to check if the current phase is analyzing
+    // (moved to ScanPhase extension below)
+    
+    
 
 #if DEBUG
     private var debugControls: some View {
@@ -229,60 +152,6 @@ struct ScanView: View {
         .frame(maxWidth: .infinity, alignment: .leading)
     }
 #endif
-}
-
-private struct PetOptionsView: View {
-    @Binding var includeDog: Bool
-    @Binding var includeCat: Bool
-    
-    var body: some View {
-        VStack(spacing: 16) {
-            Toggle(isOn: $includeDog) {
-                Label {
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text("Dog Safety")
-                        Text("Include dog safety warnings")
-                            .font(.caption)
-                            .foregroundColor(.secondary)
-                    }
-                } icon: {
-                    Image(systemName: "pawprint.fill").foregroundColor(.orange)
-                }
-            }
-            .toggleStyle(SwitchToggleStyle(tint: .orange))
-            
-            Toggle(isOn: $includeCat) {
-                Label {
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text("Cat Safety")
-                        Text("Include cat safety warnings")
-                            .font(.caption)
-                            .foregroundColor(.secondary)
-                    }
-                } icon: {
-                    Image(systemName: "pawprint.fill").foregroundColor(.purple)
-                }
-            }
-            .toggleStyle(SwitchToggleStyle(tint: .purple))
-            
-            VStack(alignment: .leading, spacing: 8) {
-                HStack(spacing: 8) {
-                    Image(systemName: "info.circle")
-                    Text("How it works").font(.subheadline.bold())
-                }
-                Text("When enabled, pet safety warnings will be included in the overall safety score. This helps identify products that may be harmful to your pets.")
-                    .font(.caption)
-            }
-            .padding()
-            .frame(maxWidth: .infinity)
-            .background(Color.blue.opacity(0.1))
-            .cornerRadius(8)
-        }
-        .padding()
-        .background(Color.secondary.opacity(0.1))
-        .cornerRadius(12)
-        .padding(.horizontal)
-    }
 }
 
 private enum ActiveSheet: Identifiable {

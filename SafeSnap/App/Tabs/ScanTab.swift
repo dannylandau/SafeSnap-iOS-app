@@ -11,8 +11,13 @@ import SwiftUI
 @MainActor
 struct ScanTab: View {
     @StateObject private var viewModel: ScanViewModel
+    @State private var showHistory = false
+    @State private var showAccount = false
+
+    private let dependencies: AppDependencies
 
     init(dependencies: AppDependencies) {
+        self.dependencies = dependencies
         let coordinator = ScanAnalysisCoordinator(
             geminiService: dependencies.geminiService,
             visionService: dependencies.visionService,
@@ -25,7 +30,18 @@ struct ScanTab: View {
 
     var body: some View {
         NavigationStack {
-            ScanView(viewModel: viewModel)
+            ScanView(
+                viewModel: viewModel,
+                userSession: dependencies.userSession,
+                onShowHistory: { showHistory = true },
+                onShowAccount: { showAccount = true }
+            )
+        }
+        .sheet(isPresented: $showHistory) {
+            HistoryTab(dependencies: dependencies)
+        }
+        .sheet(isPresented: $showAccount) {
+            AccountTab(dependencies: dependencies)
         }
     }
 }
