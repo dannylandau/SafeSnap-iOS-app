@@ -17,19 +17,19 @@ struct PetSafetyCard: View {
                 .font(.headline)
 
             ToggleRow(
-                icon: "pawprint.fill",
+                icon: "dog_safety",
                 title: "Dog Safety",
                 subtitle: "Include dog safety warning",
                 isOn: $includeDog,
-                tint: Color.orange
+                tint: Color(red: 219.0/255.0, green: 157.0/255.0, blue: 52.0/255.0)
             )
 
             ToggleRow(
-                icon: "pawprint",
+                icon: "cat_safety",
                 title: "Cat Safety",
                 subtitle: "Include cat safety warnings",
                 isOn: $includeCat,
-                tint: Color.green
+                tint: Color(red: 232.0/255.0, green: 56.0/255.0, blue: 211.0/255.0)
             )
         }
         .padding(24)
@@ -51,11 +51,11 @@ private struct ToggleRow: View {
 
     var body: some View {
         HStack(spacing: 16) {
-            Image(systemName: icon)
+            Image(icon)
                 .font(.title2)
-                .foregroundColor(tint)
+//                .foregroundColor(tint)
                 .frame(width: 44, height: 44)
-                .background(tint.opacity(0.15))
+//                .background(tint.opacity(0.15))
                 .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
 
             VStack(alignment: .leading, spacing: 4) {
