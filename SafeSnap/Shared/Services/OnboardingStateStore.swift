@@ -17,7 +17,6 @@ final class OnboardingStateStore: ObservableObject {
     init(defaults: UserDefaults = .standard) {
         self.defaults = defaults
         self.hasCompletedOnboarding = defaults.bool(forKey: key)
-        reset()
     }
 
     func markCompleted() {
