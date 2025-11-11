@@ -630,6 +630,8 @@ private struct SafetySectionView: View {
             // Header bar
             HStack(spacing: 10) {
                 Image(iconName)
+                    .renderingMode(.template)
+                    .foregroundStyle(.white)
                 Text(title).font(.headline)
                 Spacer()
                 Image(systemName: isCollapsed ? "plus" : "minus")
@@ -774,3 +776,4 @@ struct ScoreRing: View {
         }
     }
 }
+

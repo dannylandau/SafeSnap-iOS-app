@@ -32,16 +32,6 @@ struct SignedInHistoryView: View {
                     historyListCard
                 }
             }
-
-//            ScanBottomControlsView(
-//                leftIconName: "house.fill",
-//                rightIconName: "clock.fill",
-//                onLeftTap: { dismiss() },
-//                onCapture: { dismiss() },
-//                onRightTap: {}
-//            )
-//            .allowsHitTesting(true)
-        
     }
 
     private var headerCard: some View {
@@ -161,12 +151,12 @@ private struct HistoryListRow: View {
     }
 
     private var formattedScore: String {
-        let normalized = max(0, min(100, item.analysis.overallSafetyScore))
-        return String(format: "%.0f", normalized / 10)
+        let normalized = max(0, min(100, item.analysis.childSafetyScore))
+        return String(format: "%.0f", Double(normalized) / 10.0)
     }
 
     private var scoreColor: Color {
-        switch item.analysis.overallSafetyScore {
+        switch item.analysis.childSafetyScore {
         case 0..<40: return .red
         case 40..<70: return .orange
         default: return .green
