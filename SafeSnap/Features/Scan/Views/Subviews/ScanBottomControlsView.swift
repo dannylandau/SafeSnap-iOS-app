@@ -10,6 +10,8 @@ import SwiftUI
 struct ScanBottomControlsView: View {
     let onCapture: () -> Void
     let onGallery: () -> Void
+    var isCaptureDisabled: Bool = false
+    var isGalleryDisabled: Bool = false
 
     var body: some View {
         let cameraDiameter: CGFloat = 78
@@ -21,6 +23,7 @@ struct ScanBottomControlsView: View {
                 BottomBlurShape(cameraDiameter: cameraDiameter * 1.3)
                     .fill(.ultraThinMaterial)
                     .shadow(color: Color.black.opacity(0.15), radius: 16, y: -2)
+                    .clipped()
 
                 HStack {
                     Image("home")
@@ -37,7 +40,7 @@ struct ScanBottomControlsView: View {
                     Button(action: onCapture) {
                         ZStack {
                             Circle()
-                                .fill(Color.white)
+                                .fill(isCaptureDisabled ? Color.white.opacity(0.6) : Color.white)
                                 .frame(width: cameraDiameter, height: cameraDiameter)
                             Circle()
                                 .strokeBorder(Color.green, lineWidth: 4)
@@ -45,6 +48,7 @@ struct ScanBottomControlsView: View {
                         }
                     }
                     .accessibilityLabel("Capture photo")
+                    .disabled(isCaptureDisabled)
                     .padding(.bottom, 45)
 
                     Spacer()
@@ -60,6 +64,7 @@ struct ScanBottomControlsView: View {
                             )
                     }
                     .accessibilityLabel("Choose from Photos")
+                    .disabled(isGalleryDisabled)
                 }
                 .padding(.horizontal, 60)
                 .padding(.top, -18)
@@ -150,7 +155,7 @@ private struct BottomBlurShape: Shape {
 struct ScanBottomControlsView_Previews: PreviewProvider {
     static var previews: some View {
         ScanBottomControlsView(onCapture: {}, onGallery: {})
-            .background(Color(uiColor: .systemGray6))
+            .background(.clear)
     }
 }
 #endif

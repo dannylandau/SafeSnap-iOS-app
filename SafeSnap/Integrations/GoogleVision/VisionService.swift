@@ -159,6 +159,10 @@ struct VisionLabelResult: Decodable {
         }
 
         let productName = "\(clean(specificType))"
+        let bestGuessTitle: String? = {
+            let cleaned = clean(bestGuess)
+            return cleaned.isEmpty ? nil : cleaned
+        }()
 
         // Confidence (mirrors web weighting)
         var confidence = 0.0
@@ -181,7 +185,8 @@ struct VisionLabelResult: Decodable {
             labels: labelStrings,
             objects: sortedLabels.map { $0.description },
             detectedText: detectedText,
-            confidence: confidence
+            confidence: confidence,
+            bestGuess: bestGuessTitle
         )
     }
 }
@@ -194,6 +199,7 @@ public struct VisionAnalysisResult {
     public let brandCandidates: [String]
     public let confidence: Double
     public let sanitizedContext: String?
+    public let bestGuess: String?
 
     public init(
         guess: ProductGuess,
@@ -202,7 +208,8 @@ public struct VisionAnalysisResult {
         detectedText: String?,
         brandCandidates: [String],
         confidence: Double,
-        sanitizedContext: String?
+        sanitizedContext: String?,
+        bestGuess: String?
     ) {
         self.guess = guess
         self.labels = labels
@@ -211,6 +218,7 @@ public struct VisionAnalysisResult {
         self.brandCandidates = brandCandidates
         self.confidence = confidence
         self.sanitizedContext = sanitizedContext
+        self.bestGuess = bestGuess
     }
 }
 
@@ -231,7 +239,8 @@ public extension VisionServiceType {
             detectedText: nil,
             brandCandidates: brands,
             confidence: guess.confidence,
-            sanitizedContext: nil
+            sanitizedContext: nil,
+            bestGuess: nil
         )
     }
 }
@@ -283,7 +292,8 @@ final class VisionService: VisionServiceType {
             detectedText: identification.detectedText,
             brandCandidates: identification.brandCandidates,
             confidence: guess.confidence,
-            sanitizedContext: sanitizedContext
+            sanitizedContext: sanitizedContext,
+            bestGuess: identification.bestGuess
         )
     }
 
@@ -443,12 +453,12 @@ final class VisionService: VisionServiceType {
         let classification: ProductIdentification = (try? classifier.classifyProduct(from: visionData)) ?? ProductIdentification(
             productType: "ProductType - Unknown",
             productName: "Product - Unknown",
-//            specificType: "Unknown",
             brandCandidates: brands,
             labels: labels.map { $0.description },
             objects: topObjects.compactMap { $0["name"] as? String },
             detectedText: trimmedText.isEmpty ? nil : trimmedText,
-            confidence: 0
+            confidence: 0,
+            bestGuess: bestGuess
         )
 
         // Build compact dictionary

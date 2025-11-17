@@ -26,6 +26,7 @@ struct VisionContextPayload {
     let objects: [String]
     let detectedText: String?
     let sanitizedContext: String?
+    let bestGuess: String?
 
     init(
         guessName: String,
@@ -35,7 +36,8 @@ struct VisionContextPayload {
         labels: [String],
         objects: [String],
         detectedText: String?,
-        sanitizedContext: String?
+        sanitizedContext: String?,
+        bestGuess: String?
     ) {
         self.guessName = guessName
         self.guessType = guessType
@@ -45,6 +47,7 @@ struct VisionContextPayload {
         self.objects = objects
         self.detectedText = detectedText
         self.sanitizedContext = sanitizedContext
+        self.bestGuess = bestGuess
     }
 }
 

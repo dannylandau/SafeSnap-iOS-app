@@ -31,12 +31,12 @@ struct IntroPageCardView<Footer: View>: View {
             VStack(alignment: .leading, spacing: 12) {
                 Text(page.title)
                     .font(.title.bold())
-                    .foregroundColor(.primary)
+                    .foregroundColor(.black)
                     .multilineTextAlignment(.leading)
 
                 Text(page.subtitle)
                     .font(.body)
-                    .foregroundColor(.secondary)
+                    .foregroundColor(.gray)
                     .multilineTextAlignment(.leading)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
@@ -49,7 +49,7 @@ struct IntroPageCardView<Footer: View>: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(
             RoundedRectangle(cornerRadius: 32, style: .continuous)
-                .fill(Color.white)
+                .fill(.white)
                 .shadow(color: Color.black.opacity(0.08), radius: 20, x: 0, y: 12)
         )
         .padding(.horizontal, 20)

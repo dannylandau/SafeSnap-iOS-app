@@ -15,4 +15,5 @@ struct ProductIdentification: Codable {
     let objects: [String]                // localized objects ("bottle", "power cord")
     let detectedText: String?            // OCR-like text block
     let confidence: Double               // 0.0 - 1.0
+    let bestGuess: String?               // Google Vision best guess label
 }
