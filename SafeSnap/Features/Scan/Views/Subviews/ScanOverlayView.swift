@@ -14,23 +14,28 @@ struct ScanOverlayView: View {
     let mode: Mode
     let availableSize: CGSize
 
+    private let minSide: CGFloat = 220
+    private let horizontalPadding: CGFloat = 64    // must match parent padding (32 each side)
+    private let verticalAllowance: CGFloat = 320   // space reserved for top text + bottom controls
+
     var body: some View {
-        let widthBound = availableSize.width * 0.78
-        let heightBound = availableSize.height * 0.58
-        let square = max(min(widthBound, heightBound), 220)
+        // Keep the overlay within the safe area by honoring both proportional and absolute limits.
+        let widthBound = max(min(availableSize.width * 0.78, availableSize.width - horizontalPadding), minSide)
+        let heightBound = max(min(availableSize.height * 0.58, availableSize.height - verticalAllowance), minSide)
+        let square = max(min(widthBound, heightBound), minSide)
 
         ZStack {
-            RoundedRectangle(cornerRadius: 28, style: .continuous)
-                .fill(Color.white.opacity(0.12))
-                .frame(width: square, height: square)
+//            RoundedRectangle(cornerRadius: 28, style: .continuous)
+//                .fill(Color.white.opacity(0.12))
+//                .frame(width: square, height: square)
 
             ScanCornersOverlay()
-                .stroke(Color.white.opacity(0.95), style: StrokeStyle(lineWidth: 4, lineCap: .round))
-                .frame(width: square, height: square)
+                .stroke(Color.white.opacity(0.95), style: StrokeStyle(lineWidth: 2, lineCap: .round))
+                .frame(width: square, height: square*1.5)
 
             if mode == .scanning {
-                ScanSweepLine()
-                    .frame(width: square - 30, height: square - 30)
+                ScanSweepLine(side: square*1.5)
+                    .frame(width: square, height: square*1.5)
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -67,32 +72,31 @@ private struct ScanCornersOverlay: Shape {
 }
 
 private struct ScanSweepLine: View {
-    @State private var yOffset: CGFloat = -1
+    let side: CGFloat
+    @State private var yOffset: CGFloat = 0
 
     var body: some View {
-        GeometryReader { geo in
-            let height = geo.size.height
-            let gradient = LinearGradient(
-                colors: [
-                    Color.white.opacity(0),
-                    Color.white.opacity(0.7),
-                    Color.white.opacity(0)
-                ],
-                startPoint: .top,
-                endPoint: .bottom
-            )
+        let lineHeight = max(side * 0.12, 24)
+        let halfTravel = max((side - lineHeight) / 2, 0)
+        let gradient = LinearGradient(
+            colors: [
+                Color.white.opacity(0),
+                Color.white.opacity(0.7),
+                Color.white.opacity(0)
+            ],
+            startPoint: .top,
+            endPoint: .bottom
+        )
 
-            Rectangle()
-                .fill(gradient)
-                .frame(height: 80)
-                .cornerRadius(16)
-                .offset(y: yOffset)
-                .onAppear {
-                    yOffset = -height / 2
-                    withAnimation(.linear(duration: 1.8).repeatForever(autoreverses: false)) {
-                        yOffset = height / 2
-                    }
+        Rectangle()
+            .fill(gradient)
+            .frame(height: lineHeight)
+            .offset(y: yOffset)
+            .onAppear {
+                yOffset = -halfTravel
+                withAnimation(.linear(duration: 1.8).repeatForever(autoreverses: false)) {
+                    yOffset = halfTravel
                 }
-        }
+            }
     }
 }
