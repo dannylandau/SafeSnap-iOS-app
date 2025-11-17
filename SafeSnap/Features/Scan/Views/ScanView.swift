@@ -177,7 +177,7 @@ struct ScanView: View {
             if let frozenFrame {
                 Image(uiImage: frozenFrame)
                     .resizable()
-                    .scaledToFill()
+                    .scaledToFit()
                     .transition(.opacity)
             } else {
                 CameraPreview(session: cameraViewModel.session)
@@ -188,9 +188,8 @@ struct ScanView: View {
                 .ignoresSafeArea()
 
             ScanOverlayView(mode: cameraState == .analyzing ? .scanning : .framing, availableSize: size)
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-                .padding(.horizontal, 32)
-                .padding(.top, 48)
+//                .padding(.horizontal, 32)
+//                .padding(.top, 48)
         }
     }
 
