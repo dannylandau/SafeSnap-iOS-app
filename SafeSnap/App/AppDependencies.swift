@@ -13,6 +13,7 @@ import FirebaseAuth
 final class AppDependencies {
     // Shared instances
     let geminiService: GeminiService
+    let ragService: RAGService
     let historyService: ScanHistoryService
     let visionService: VisionService
     let openAIService: OpenAIService
@@ -20,6 +21,7 @@ final class AppDependencies {
     let onboardingState: OnboardingStateStore
     init(userSession: UserSession) {
         self.geminiService = GeminiService(apiKey: Bundle.main.infoDictionaryValue(for: "GoogleGeminiAPIKey")!)
+        self.ragService = RAGService()
         self.historyService = ScanHistoryService()
         self.historyService.load()
         self.userSession = userSession

@@ -23,7 +23,7 @@ struct ScanHeroHeaderView: View {
         .padding(24)
         .background(
             RoundedRectangle(cornerRadius: 32, style: .continuous)
-                .fill(Color.white)
+                .fill(.background)
                 .shadow(color: Color.black.opacity(0.08), radius: 30, x: 0, y: 20)
         )
     }

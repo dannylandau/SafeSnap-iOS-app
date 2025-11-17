@@ -217,7 +217,8 @@ final class ScanAnalysisCoordinator: ObservableObject {
             labels: labels,
             objects: visionResult.objects,
             detectedText: visionResult.detectedText,
-            sanitizedContext: visionResult.sanitizedContext
+            sanitizedContext: visionResult.sanitizedContext,
+            bestGuess: visionResult.bestGuess
         )
 
         let fastStart = ContinuousClock.now
@@ -315,7 +316,7 @@ final class ScanAnalysisCoordinator: ObservableObject {
             labels: analyzed.extras.evidence.labels,
             ocrHits: analyzed.extras.evidence.ocrHits,
             rulesTriggered: analyzed.extras.policy.rulesTriggered,
-            dataSources: ["Google Vision", "Google Gemini"]
+            dataSources: ["Google Vision", "SafeSnap Toxicity Service"]
         )
         self.resultDTO = dto
 
@@ -345,7 +346,8 @@ final class ScanAnalysisCoordinator: ObservableObject {
             labels: labels,
             objects: visionResult.objects,
             detectedText: visionResult.detectedText,
-            confidence: visionResult.confidence
+            confidence: visionResult.confidence,
+            bestGuess: visionResult.bestGuess
         )
 
         let item = ScanHistoryBuilder.build(
@@ -355,8 +357,8 @@ final class ScanAnalysisCoordinator: ObservableObject {
             imageData: imageData,
             userToggles: toggles,
             visionContextRef: nil,
-            model: "gemini-2.5-flash-lite",
-            promptVersion: "v1-gemini"
+            model: "rag-toxic-check",
+            promptVersion: "v1-rag"
         )
         self.historyService.add(item)
         self.latestHistoryItem = item

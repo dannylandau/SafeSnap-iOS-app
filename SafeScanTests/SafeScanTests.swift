@@ -110,7 +110,8 @@ final class SafeSnapEndToEndTests: XCTestCase {
             detectedText: "SnackCo Fruit Snack",
             brandCandidates: ["SnackCo"],
             confidence: guess.confidence,
-            sanitizedContext: "{\"labels\":[\"fruit\"],\"ocr\":[\"Fruit Snack\"]}"
+            sanitizedContext: "{\"labels\":[\"fruit\"],\"ocr\":[\"Fruit Snack\"]}",
+            bestGuess: "Fruit Snack"
         )
     }
 

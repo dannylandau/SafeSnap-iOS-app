@@ -19,7 +19,7 @@ struct ScanTab: View {
     init(dependencies: AppDependencies) {
         self.dependencies = dependencies
         let coordinator = ScanAnalysisCoordinator(
-            geminiService: dependencies.geminiService,
+            analyzer: dependencies.ragService,
             visionService: dependencies.visionService,
             historyService: dependencies.historyService
         )

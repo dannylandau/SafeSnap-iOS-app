@@ -137,7 +137,8 @@ final class ScanAnalysisCoordinatorTests: XCTestCase {
             detectedText: "SnackCo Fruit Snack",
             brandCandidates: ["SnackCo"],
             confidence: guess.confidence,
-            sanitizedContext: "{\"labels\":[\"fruit\",\"snack\"]}"
+            sanitizedContext: "{\"labels\":[\"fruit\",\"snack\"]}",
+            bestGuess: "Fruit Snack"
         )
     }
 }
