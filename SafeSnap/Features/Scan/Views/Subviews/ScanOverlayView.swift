@@ -25,10 +25,6 @@ struct ScanOverlayView: View {
         let square = max(min(widthBound, heightBound), minSide)
 
         ZStack {
-//            RoundedRectangle(cornerRadius: 28, style: .continuous)
-//                .fill(Color.white.opacity(0.12))
-//                .frame(width: square, height: square)
-
             ScanCornersOverlay()
                 .stroke(Color.white.opacity(0.95), style: StrokeStyle(lineWidth: 2, lineCap: .round))
                 .frame(width: square, height: square*1.5)
