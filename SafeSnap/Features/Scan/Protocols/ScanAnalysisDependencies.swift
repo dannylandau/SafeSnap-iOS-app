@@ -27,6 +27,7 @@ struct VisionContextPayload {
     let detectedText: String?
     let sanitizedContext: String?
     let bestGuess: String?
+    let webEntities: [String]
 
     init(
         guessName: String,
@@ -37,7 +38,8 @@ struct VisionContextPayload {
         objects: [String],
         detectedText: String?,
         sanitizedContext: String?,
-        bestGuess: String?
+        bestGuess: String?,
+        webEntities: [String]
     ) {
         self.guessName = guessName
         self.guessType = guessType
@@ -48,6 +50,7 @@ struct VisionContextPayload {
         self.detectedText = detectedText
         self.sanitizedContext = sanitizedContext
         self.bestGuess = bestGuess
+        self.webEntities = webEntities
     }
 }
 

@@ -73,6 +73,8 @@ final class AccountViewModelTests: XCTestCase {
             brand: "TestCo",
             confidence: 0.9,
             visionContextRef: nil,
+            visionBestGuess: nil,
+            visionWebEntities: [],
             analysis: analysis,
             model: "test-model",
             promptVersion: "test-prompt",

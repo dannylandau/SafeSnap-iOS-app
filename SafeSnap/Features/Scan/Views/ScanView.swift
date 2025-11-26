@@ -155,10 +155,7 @@ struct ScanView: View {
                             .foregroundColor(.white.opacity(0.85))
                             .padding(.bottom, 8)
                     } else {
-                        Text("Scanning...")
-                            .font(.headline.weight(.semibold))
-                            .foregroundColor(.white)
-                            .padding(.bottom, 8)
+                        analyzingProgress
                     }
 
                     ScanBottomControlsView(
@@ -278,4 +275,92 @@ struct ScanView: View {
         .frame(maxWidth: .infinity, alignment: .leading)
     }
 #endif
+}
+
+private extension ScanView {
+    var analyzingProgress: some View {
+        VStack(spacing: 10) {
+            VStack(alignment: .leading, spacing: 8) {
+                progressRow(
+                    title: "Identifying product (Google Vision)",
+                    isActive: viewModel.stage == .vision,
+                    isComplete: viewModel.stage != .vision
+                )
+                if viewModel.stage != .vision {
+                    VStack(alignment: .leading, spacing: 6) {
+                        if let guess = viewModel.visionBestGuess, !guess.isEmpty {
+                            Text("Vision best guess: \(guess)")
+                                .font(.subheadline.weight(.medium))
+                                .foregroundColor(.white)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                        }
+                        
+                        if !viewModel.visionWebEntities.isEmpty {
+                            Text("WebEntities:")
+                                .font(.subheadline.weight(.medium))
+                                .foregroundColor(.white)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                            ScrollView(.horizontal, showsIndicators: false) {
+                                HStack(spacing: 8) {
+                                    ForEach(viewModel.visionWebEntities.prefix(8), id: \.self) { entity in
+                                        Text(entity)
+                                            .font(.caption)
+                                            .padding(.vertical, 6)
+                                            .padding(.horizontal, 10)
+                                            .background(Color.white.opacity(0.15))
+                                            .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+                                            .foregroundColor(.white.opacity(0.9))
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                }
+                progressRow(
+                    title: "Checking safety (SafeSnap Toxicity Service)",
+                    isActive: viewModel.stage == .fast,
+                    isComplete: viewModel.stage == .smart
+                )
+            }
+            .padding(12)
+            .frame(maxWidth: .infinity)
+            .background(Color.white.opacity(0.1))
+            .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+
+
+            if let partial = viewModel.partialStatus, !partial.isEmpty {
+                Text(partial)
+                    .font(.subheadline)
+                    .foregroundColor(.white.opacity(0.85))
+                    .multilineTextAlignment(.center)
+                    .padding(.horizontal, 12)
+            }
+        }
+        .padding(.bottom, 4)
+    }
+
+    func progressRow(title: String, isActive: Bool, isComplete: Bool) -> some View {
+        HStack(spacing: 10) {
+            if isComplete {
+                Image(systemName: "checkmark.circle.fill")
+                    .foregroundColor(.green)
+            } else if isActive {
+                ProgressView()
+                    .progressViewStyle(.circular)
+                    .tint(.white)
+                    .frame(width: 20, height: 20)
+            } else {
+                Image(systemName: "circle")
+                    .foregroundColor(.white.opacity(0.35))
+            }
+
+            Text(title)
+                .font(.subheadline)
+                .foregroundColor(.white.opacity(isComplete ? 0.85 : 1.0))
+                .lineLimit(2)
+                .minimumScaleFactor(0.9)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
 }

@@ -57,6 +57,8 @@ final class ScanHistoryServiceTests: XCTestCase {
             brand: "SnackCo",
             confidence: 0.92,
             visionContextRef: nil,
+            visionBestGuess: nil,
+            visionWebEntities: [],
             analysis: analysis,
             model: "gemini-1.5-flash",
             promptVersion: "v1",

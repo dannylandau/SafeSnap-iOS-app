@@ -30,6 +30,8 @@ final class RecognitionResultViewModel: ObservableObject, Identifiable {
     let category: String
     let date: Date
     let scanDurationDescription: String?
+    let visionBestGuess: String?
+    let visionWebEntities: [String]
     
     // Persisted image (filename-only for durability across reinstalls)
     let imageFilename: String?
@@ -175,7 +177,9 @@ final class RecognitionResultViewModel: ObservableObject, Identifiable {
         canonicalCategory: String? = nil,
         rulesTriggered: [String] = [],
         evidence: SafetyEvidence = .init(labels: [], ocrHits: []),
-        dto: GeminiSafetyDTO? = nil
+        dto: GeminiSafetyDTO? = nil,
+        visionBestGuess: String? = nil,
+        visionWebEntities: [String] = []
     ) {
         self.image = image
         self.productName = productName
@@ -190,6 +194,8 @@ final class RecognitionResultViewModel: ObservableObject, Identifiable {
         self.rulesTriggered = rulesTriggered
         self.evidence = evidence
         self.dto = dto
+        self.visionBestGuess = visionBestGuess?.trimmingCharacters(in: .whitespacesAndNewlines)
+        self.visionWebEntities = visionWebEntities.map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }.filter { !$0.isEmpty }
         // Surface confidences from DTO when present
         self.childConfidence = dto?.childConfidence
         self.dogConfidence = dto?.dogConfidence
@@ -232,7 +238,9 @@ extension RecognitionResultViewModel {
             includeDogs: item.userToggles.includeDogs,
             includeCats: item.userToggles.includeCats,
             imageFilename: item.imageFilename,
-            scanDurationDescription: scanDurationDescription
+            scanDurationDescription: scanDurationDescription,
+            visionBestGuess: item.visionBestGuess,
+            visionWebEntities: item.visionWebEntities
         )
     }
 

@@ -186,7 +186,8 @@ struct VisionLabelResult: Decodable {
             objects: sortedLabels.map { $0.description },
             detectedText: detectedText,
             confidence: confidence,
-            bestGuess: bestGuessTitle
+            bestGuess: bestGuessTitle,
+            webEntities: Array(webEntities.prefix(10))
         )
     }
 }
@@ -200,6 +201,7 @@ public struct VisionAnalysisResult {
     public let confidence: Double
     public let sanitizedContext: String?
     public let bestGuess: String?
+    public let webEntities: [String]
 
     public init(
         guess: ProductGuess,
@@ -209,7 +211,8 @@ public struct VisionAnalysisResult {
         brandCandidates: [String],
         confidence: Double,
         sanitizedContext: String?,
-        bestGuess: String?
+        bestGuess: String?,
+        webEntities: [String]
     ) {
         self.guess = guess
         self.labels = labels
@@ -219,6 +222,7 @@ public struct VisionAnalysisResult {
         self.confidence = confidence
         self.sanitizedContext = sanitizedContext
         self.bestGuess = bestGuess
+        self.webEntities = webEntities
     }
 }
 
@@ -240,7 +244,8 @@ public extension VisionServiceType {
             brandCandidates: brands,
             confidence: guess.confidence,
             sanitizedContext: nil,
-            bestGuess: nil
+            bestGuess: nil,
+            webEntities: []
         )
     }
 }
@@ -293,7 +298,8 @@ final class VisionService: VisionServiceType {
             brandCandidates: identification.brandCandidates,
             confidence: guess.confidence,
             sanitizedContext: sanitizedContext,
-            bestGuess: identification.bestGuess
+            bestGuess: identification.bestGuess,
+            webEntities: identification.webEntities
         )
     }
 
@@ -416,6 +422,7 @@ final class VisionService: VisionServiceType {
         let webEntities = (first.webDetection?.webEntities ?? [])
             .filter { ($0.score ?? 0) > 0.5 }
             .sorted { ($0.score ?? 0) > ($1.score ?? 0) }
+        let webEntityStrings = webEntities.compactMap { $0.description?.lowercased() }
         let topEntities = Array(webEntities.prefix(10)).compactMap { ent -> [String: Any]? in
             guard let desc = ent.description else { return nil }
             return ["description": desc, "score": ent.score ?? 0]
@@ -458,7 +465,8 @@ final class VisionService: VisionServiceType {
             objects: topObjects.compactMap { $0["name"] as? String },
             detectedText: trimmedText.isEmpty ? nil : trimmedText,
             confidence: 0,
-            bestGuess: bestGuess
+            bestGuess: bestGuess,
+            webEntities: Array(webEntityStrings.prefix(10))
         )
 
         // Build compact dictionary

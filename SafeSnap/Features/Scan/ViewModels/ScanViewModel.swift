@@ -8,6 +8,7 @@
 import Foundation
 import PhotosUI
 import SwiftUI
+import Combine
 
 @MainActor
 protocol ScanAnalysisCoordinating: AnyObject {
@@ -18,17 +19,25 @@ protocol ScanAnalysisCoordinating: AnyObject {
     var fastDuration: TimeInterval? { get }
     var visionDuration: TimeInterval? { get }
     var smartDuration: TimeInterval? { get }
-    
+    var stagePublisher: AnyPublisher<SafetyAnalyzer.Stage, Never> { get }
+    var partialPublisher: AnyPublisher<String?, Never> { get }
+    var visionBestGuessPublisher: AnyPublisher<String?, Never> { get }
+    var visionWebEntitiesPublisher: AnyPublisher<[String], Never> { get }
 }
 
 extension ScanAnalysisCoordinator: ScanAnalysisCoordinating {}
 
+@MainActor
 final class ScanViewModel: ObservableObject {
     @Published var resultVM: RecognitionResultViewModel? = nil
     @Published var phase: ScanPhase = .idle
     @Published var scanError: ScanError? = nil
     @Published var scanDurationText: String? = nil
     @Published private(set) var scanDurationEnabled: Bool
+    @Published private(set) var stage: SafetyAnalyzer.Stage = .vision
+    @Published private(set) var partialStatus: String? = nil
+    @Published private(set) var visionBestGuess: String? = nil
+    @Published private(set) var visionWebEntities: [String] = []
     
     @MainActor let alerts = AlertCenter()
 
@@ -42,6 +51,7 @@ final class ScanViewModel: ObservableObject {
     private let durationTracker: ScanDurationTracking
     private let durationFormatter: ScanDurationFormatting
     private let featureFlags: FeatureFlagProviding
+    private var cancellables: Set<AnyCancellable> = []
 
     init(
         coordinator: ScanAnalysisCoordinating,
@@ -53,7 +63,8 @@ final class ScanViewModel: ObservableObject {
         self.durationTracker = durationTracker
         self.durationFormatter = durationFormatter
         self.featureFlags = featureFlags
-        self.scanDurationEnabled = featureFlags.isEnabled(.scanDurationTimer)
+        scanDurationEnabled = featureFlags.isEnabled(.scanDurationTimer)
+        bindCoordinator()
     }
 
     func handleImage(_ image: UIImage) {
@@ -184,6 +195,10 @@ final class ScanViewModel: ObservableObject {
             self.lastUIImage = nil
             self.durationTracker.reset()
             self.scanDurationText = nil
+            self.stage = .vision
+            self.partialStatus = nil
+            self.visionBestGuess = nil
+            self.visionWebEntities = []
         }
     }
 
@@ -205,5 +220,36 @@ final class ScanViewModel: ObservableObject {
             durationTracker.reset()
             scanDurationText = nil
         }
+    }
+
+    @MainActor
+    private func bindCoordinator() {
+        coordinator.stagePublisher
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] stage in
+                self?.stage = stage
+            }
+            .store(in: &cancellables)
+
+        coordinator.partialPublisher
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] message in
+                self?.partialStatus = message
+            }
+            .store(in: &cancellables)
+
+        coordinator.visionBestGuessPublisher
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] guess in
+                self?.visionBestGuess = guess
+            }
+            .store(in: &cancellables)
+
+        coordinator.visionWebEntitiesPublisher
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] entities in
+                self?.visionWebEntities = entities
+            }
+            .store(in: &cancellables)
     }
 }
