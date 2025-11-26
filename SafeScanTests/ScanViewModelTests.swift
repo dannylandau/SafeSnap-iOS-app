@@ -7,6 +7,7 @@
 
 import XCTest
 @testable import SafeSnap
+import Combine
 import UIKit
 
 final class ScanViewModelTests: XCTestCase {
@@ -62,6 +63,8 @@ final class ScanViewModelTests: XCTestCase {
             brand: "SnackCo",
             confidence: 0.9,
             visionContextRef: nil,
+            visionBestGuess: nil,
+            visionWebEntities: [],
             analysis: analysis,
             model: "gemini-2.5-flash-lite",
             promptVersion: "v1",
@@ -323,7 +326,13 @@ private final class MockCoordinator: ScanAnalysisCoordinating {
     var cancelCallCount = 0
     var stubHistoryItem: ScanHistoryItem?
     var latestHistoryItem: ScanHistoryItem?
-    var stage: SafetyAnalyzer.Stage = .fast
+    var stage: SafetyAnalyzer.Stage = .fast {
+        didSet { stageSubject.send(stage) }
+    }
+    private let stageSubject = CurrentValueSubject<SafetyAnalyzer.Stage, Never>(.fast)
+    private let partialSubject = CurrentValueSubject<String?, Never>(nil)
+    private let bestGuessSubject = CurrentValueSubject<String?, Never>(nil)
+    private let webEntitiesSubject = CurrentValueSubject<[String], Never>([])
 
     func startGeminiScan(image: UIImage, options: SafetyOptions) async throws {
         startCalls.append(options)
@@ -333,4 +342,9 @@ private final class MockCoordinator: ScanAnalysisCoordinating {
     func cancelAnalysis() {
         cancelCallCount += 1
     }
+
+    var stagePublisher: AnyPublisher<SafetyAnalyzer.Stage, Never> { stageSubject.eraseToAnyPublisher() }
+    var partialPublisher: AnyPublisher<String?, Never> { partialSubject.eraseToAnyPublisher() }
+    var visionBestGuessPublisher: AnyPublisher<String?, Never> { bestGuessSubject.eraseToAnyPublisher() }
+    var visionWebEntitiesPublisher: AnyPublisher<[String], Never> { webEntitiesSubject.eraseToAnyPublisher() }
 }

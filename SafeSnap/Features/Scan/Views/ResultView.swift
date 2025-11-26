@@ -155,7 +155,9 @@ struct ResultView: View {
         let hasRules = !vm.rulesTriggered.isEmpty
         let hasLabels = !vm.evidence.labels.isEmpty
         let hasOCR = !vm.evidence.ocrHits.isEmpty
-        return hasCategory || hasRules || hasLabels || hasOCR
+        let hasBestGuess = (vm.visionBestGuess?.isEmpty == false)
+        let hasWebEntities = !vm.visionWebEntities.isEmpty
+        return hasCategory || hasRules || hasLabels || hasOCR || hasBestGuess || hasWebEntities
     }
 
     // MARK: — Image Card
@@ -403,6 +405,17 @@ struct ResultView: View {
                 }
             }
 
+            if let bestGuess = vm.visionBestGuess, !bestGuess.isEmpty {
+                VStack(alignment: .leading, spacing: 6) {
+                    Text("Vision best guess")
+                        .font(.subheadline).fontWeight(.semibold)
+                    Text(bestGuess)
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                        .textSelection(.enabled)
+                }
+            }
+
             if !vm.evidence.labels.isEmpty {
                 VStack(alignment: .leading, spacing: 6) {
                     Text("Vision labels")
@@ -422,6 +435,24 @@ struct ResultView: View {
                         .font(.footnote)
                         .foregroundStyle(.secondary)
                         .textSelection(.enabled)
+                }
+            }
+
+            if !vm.visionWebEntities.isEmpty {
+                VStack(alignment: .leading, spacing: 6) {
+                    Text("Web entities")
+                        .font(.subheadline).fontWeight(.semibold)
+                    LazyVGrid(columns: [GridItem(.adaptive(minimum: 120), spacing: 8)], spacing: 8) {
+                        ForEach(vm.visionWebEntities, id: \.self) { entity in
+                            Text(entity)
+                                .font(.footnote)
+                                .padding(.vertical, 6)
+                                .padding(.horizontal, 10)
+                                .background(Color.secondary.opacity(0.12))
+                                .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+                                .foregroundStyle(.secondary)
+                        }
+                    }
                 }
             }
         }
@@ -776,4 +807,3 @@ struct ScoreRing: View {
         }
     }
 }
-

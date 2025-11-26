@@ -138,7 +138,8 @@ final class ScanAnalysisCoordinatorTests: XCTestCase {
             brandCandidates: ["SnackCo"],
             confidence: guess.confidence,
             sanitizedContext: "{\"labels\":[\"fruit\",\"snack\"]}",
-            bestGuess: "Fruit Snack"
+            bestGuess: "Fruit Snack",
+            webEntities: ["fruit snack"]
         )
     }
 }

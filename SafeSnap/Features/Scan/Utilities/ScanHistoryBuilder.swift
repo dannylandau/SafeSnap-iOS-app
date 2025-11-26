@@ -34,6 +34,8 @@ enum ScanHistoryBuilder {
             brand: product.brandCandidates.first,
             confidence: product.confidence,
             visionContextRef: visionContextRef,
+            visionBestGuess: product.bestGuess,
+            visionWebEntities: product.webEntities,
             analysis: analysis,
             model: model,
             promptVersion: promptVersion,

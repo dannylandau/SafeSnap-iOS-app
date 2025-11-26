@@ -9,6 +9,7 @@ import Foundation
 import SwiftUI
 import CoreGraphics
 import UIKit
+import Combine
 
 private actor FileScanImageStore: ScanImageStoring {
     private enum ImageFormat: String { case jpg, png }
@@ -172,6 +173,24 @@ final class ScanAnalysisCoordinator: ObservableObject {
     @Published var latestHistoryItem: ScanHistoryItem?
     @Published var resultDTO: GeminiSafetyDTO? = nil
     @Published var explainability: AnalysisExtras? = nil
+    @Published var visionBestGuess: String? = nil
+    @Published var visionWebEntities: [String] = []
+
+    var stagePublisher: AnyPublisher<SafetyAnalyzer.Stage, Never> {
+        $stage.eraseToAnyPublisher()
+    }
+
+    var partialPublisher: AnyPublisher<String?, Never> {
+        $partial.eraseToAnyPublisher()
+    }
+
+    var visionBestGuessPublisher: AnyPublisher<String?, Never> {
+        $visionBestGuess.eraseToAnyPublisher()
+    }
+
+    var visionWebEntitiesPublisher: AnyPublisher<[String], Never> {
+        $visionWebEntities.eraseToAnyPublisher()
+    }
     
     convenience init(geminiService: GeminiService, visionService: VisionServiceType, historyService: ScanHistoryService) {
         self.init(analyzer: geminiService, visionService: visionService, historyService: historyService)
@@ -192,6 +211,9 @@ final class ScanAnalysisCoordinator: ObservableObject {
     @MainActor
     func startGeminiScan(image: UIImage, options: SafetyOptions) async throws {
         stage = .vision
+        partial = nil
+        visionBestGuess = nil
+        visionWebEntities = []
         visionDuration = nil
         fastDuration = nil
         smartDuration = nil
@@ -203,6 +225,9 @@ final class ScanAnalysisCoordinator: ObservableObject {
         }
         visionGuess = visionResult.guess
         visionDuration = seconds(visionStart.duration(to: ContinuousClock.now))
+        let trimmedBest = visionResult.bestGuess?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        visionBestGuess = trimmedBest.isEmpty ? visionResult.guess.name : trimmedBest
+        visionWebEntities = visionResult.webEntities
 
         currentPhase = .openAI
         stage = .fast
@@ -218,15 +243,16 @@ final class ScanAnalysisCoordinator: ObservableObject {
             objects: visionResult.objects,
             detectedText: visionResult.detectedText,
             sanitizedContext: visionResult.sanitizedContext,
-            bestGuess: visionResult.bestGuess
+            bestGuess: visionResult.bestGuess,
+            webEntities: visionResult.webEntities
         )
 
         let fastStart = ContinuousClock.now
         let analyzed = try await analyzer.analyzeSafetyWithExtras(
             image: image,
             options: options,
-            streamToken: { [weak self] _ in
-                Task { @MainActor in self?.partial = "Analyzing…" }
+            streamToken: { [weak self] token in
+                Task { @MainActor in self?.partial = token }
             },
             visionLabels: labels,
             ocrHits: ocrHits,
@@ -347,7 +373,8 @@ final class ScanAnalysisCoordinator: ObservableObject {
             objects: visionResult.objects,
             detectedText: visionResult.detectedText,
             confidence: visionResult.confidence,
-            bestGuess: visionResult.bestGuess
+            bestGuess: visionResult.bestGuess,
+            webEntities: visionResult.webEntities
         )
 
         let item = ScanHistoryBuilder.build(

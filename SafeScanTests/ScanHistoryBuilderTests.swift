@@ -20,7 +20,9 @@ final class ScanHistoryBuilderTests: XCTestCase {
             labels: ["fruit"],
             objects: ["bar"],
             detectedText: "Fruit Snack",
-            confidence: 0.92
+            confidence: 0.92,
+            bestGuess: "fruit snack",
+            webEntities: ["fruit snack"]
         )
         let analysis = makeAnalysis()
         let toggles = ScanHistoryItem.UserToggles(includeDogs: true, includeCats: false, includeChildren: true)
@@ -42,6 +44,8 @@ final class ScanHistoryBuilderTests: XCTestCase {
         XCTAssertEqual(item.model, "gemini-test")
         XCTAssertEqual(item.promptVersion, "v-test")
         XCTAssertEqual(item.analysis.productName, analysis.productName)
+        XCTAssertEqual(item.visionBestGuess, product.bestGuess)
+        XCTAssertEqual(item.visionWebEntities, product.webEntities)
 
         let expectedHash = sha256Hex(data)
         XCTAssertEqual(item.imageHash, expectedHash)

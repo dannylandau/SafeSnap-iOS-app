@@ -39,6 +39,8 @@ public struct ScanHistoryItem: Codable, Identifiable, Equatable {
     public let brand: String?
     public let confidence: Double
     public let visionContextRef: URL? // optional externalized sanitized JSON
+    public let visionBestGuess: String?
+    public let visionWebEntities: [String]
 
     // OpenAI snapshot (structured)
     public let analysis: SafetyAnalysisResponse
@@ -61,6 +63,8 @@ public struct ScanHistoryItem: Codable, Identifiable, Equatable {
         brand: String?,
         confidence: Double,
         visionContextRef: URL?,
+        visionBestGuess: String?,
+        visionWebEntities: [String],
         analysis: SafetyAnalysisResponse,
         model: String,
         promptVersion: String,
@@ -78,6 +82,8 @@ public struct ScanHistoryItem: Codable, Identifiable, Equatable {
         self.brand = brand
         self.confidence = confidence
         self.visionContextRef = visionContextRef
+        self.visionBestGuess = visionBestGuess
+        self.visionWebEntities = visionWebEntities
         self.analysis = analysis
         self.model = model
         self.promptVersion = promptVersion
@@ -100,6 +106,7 @@ public struct ScanHistoryItem: Codable, Identifiable, Equatable {
         case imageHash
         case userToggles
         case productName, productType, categoryName, brand, confidence, visionContextRef
+        case visionBestGuess, visionWebEntities
         case analysis, model, promptVersion, appVersion
         // Legacy key kept for decoding only
         case imageRef
@@ -127,6 +134,8 @@ public struct ScanHistoryItem: Codable, Identifiable, Equatable {
         self.brand = try c.decodeIfPresent(String.self, forKey: .brand)
         self.confidence = try c.decode(Double.self, forKey: .confidence)
         self.visionContextRef = try c.decodeIfPresent(URL.self, forKey: .visionContextRef)
+        self.visionBestGuess = try c.decodeIfPresent(String.self, forKey: .visionBestGuess)
+        self.visionWebEntities = try c.decodeIfPresent([String].self, forKey: .visionWebEntities) ?? []
         self.analysis = try c.decode(SafetyAnalysisResponse.self, forKey: .analysis)
         self.model = try c.decode(String.self, forKey: .model)
         self.promptVersion = try c.decode(String.self, forKey: .promptVersion)
@@ -147,6 +156,10 @@ public struct ScanHistoryItem: Codable, Identifiable, Equatable {
         try c.encodeIfPresent(brand, forKey: .brand)
         try c.encode(confidence, forKey: .confidence)
         try c.encodeIfPresent(visionContextRef, forKey: .visionContextRef)
+        try c.encodeIfPresent(visionBestGuess, forKey: .visionBestGuess)
+        if !visionWebEntities.isEmpty {
+            try c.encode(visionWebEntities, forKey: .visionWebEntities)
+        }
         try c.encode(analysis, forKey: .analysis)
         try c.encode(model, forKey: .model)
         try c.encode(promptVersion, forKey: .promptVersion)

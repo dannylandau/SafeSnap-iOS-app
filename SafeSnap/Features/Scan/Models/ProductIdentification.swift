@@ -16,4 +16,5 @@ struct ProductIdentification: Codable {
     let detectedText: String?            // OCR-like text block
     let confidence: Double               // 0.0 - 1.0
     let bestGuess: String?               // Google Vision best guess label
+    let webEntities: [String]            // High-signal web entities from Vision
 }
