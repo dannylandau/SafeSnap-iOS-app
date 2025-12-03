@@ -20,7 +20,6 @@ final class AppDependencies {
     
     let apiService: SafeSnapAPIService
     let storageService: FirebaseStorageService
-    let analysisService: BackendAnalysisService
     let historyService: ScanHistoryService
     
     // MARK: - Init
@@ -39,13 +38,6 @@ final class AppDependencies {
         
         // Storage service for image uploads
         self.storageService = FirebaseStorageService.shared
-        
-        // Analysis service using backend API
-        self.analysisService = BackendAnalysisService(
-            apiService: apiService,
-            storageService: storageService,
-            userSession: userSession
-        )
         
         // History service (will sync with backend when user is signed in)
         self.historyService = ScanHistoryService()

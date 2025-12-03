@@ -7,6 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		7DDC17A52EE0A7FE00679CA8 /* FirebaseStorage in Frameworks */ = {isa = PBXBuildFile; productRef = 7DDC17A42EE0A7FE00679CA8 /* FirebaseStorage */; };
 		7DFB00042F9C123400ABCDE0 /* FirebaseAuth in Frameworks */ = {isa = PBXBuildFile; productRef = 7DFB00022F9C123400ABCDE0 /* FirebaseAuth */; };
 /* End PBXBuildFile section */
 
@@ -82,6 +83,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				7DFB00042F9C123400ABCDE0 /* FirebaseAuth in Frameworks */,
+				7DDC17A52EE0A7FE00679CA8 /* FirebaseStorage in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -109,6 +111,7 @@
 				7DBA4AB22E0DEA1700CB1313 /* SafeSnap */,
 				7DBA4AC02E0DEA1800CB1313 /* SafeScanTests */,
 				7DBA4ACA2E0DEA1800CB1313 /* SafeScanUITests */,
+				7DDC17A32EE0A7FE00679CA8 /* Frameworks */,
 				7DBA4AB12E0DEA1700CB1313 /* Products */,
 			);
 			sourceTree = "<group>";
@@ -121,6 +124,13 @@
 				7DBA4AC72E0DEA1800CB1313 /* SafeSnapUITests.xctest */,
 			);
 			name = Products;
+			sourceTree = "<group>";
+		};
+		7DDC17A32EE0A7FE00679CA8 /* Frameworks */ = {
+			isa = PBXGroup;
+			children = (
+			);
+			name = Frameworks;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
@@ -144,6 +154,7 @@
 			name = SafeSnap;
 			packageProductDependencies = (
 				7DFB00022F9C123400ABCDE0 /* FirebaseAuth */,
+				7DDC17A42EE0A7FE00679CA8 /* FirebaseStorage */,
 			);
 			productName = SafeScan;
 			productReference = 7DBA4AB02E0DEA1700CB1313 /* SafeSnap.app */;
@@ -632,6 +643,11 @@
 /* End XCRemoteSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
+		7DDC17A42EE0A7FE00679CA8 /* FirebaseStorage */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 7DFB00032F9C123400ABCDE0 /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */;
+			productName = FirebaseStorage;
+		};
 		7DFB00022F9C123400ABCDE0 /* FirebaseAuth */ = {
 			isa = XCSwiftPackageProductDependency;
 			package = 7DFB00032F9C123400ABCDE0 /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */;
