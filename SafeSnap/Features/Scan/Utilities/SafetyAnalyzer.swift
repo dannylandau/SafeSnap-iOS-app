@@ -4,6 +4,9 @@
 //
 //  Created by Marcin Grześkowiak on 01/09/2025.
 //
+//  NOTE: This class is deprecated. Analysis is now handled by the backend API
+//  via SafeSnapAPIService. The Stage enum is still used for UI compatibility.
+//
 
 import CoreGraphics
 import Foundation
@@ -15,6 +18,7 @@ public enum PetPreference: Codable, Equatable {
     case both
 }
 
+@available(*, deprecated, message: "Use SafeSnapAPIService for analysis instead. Backend handles all analysis now.")
 public final class SafetyAnalyzer {
     private let vision: VisionServiceType
     private let openAI: OpenAIServiceType
