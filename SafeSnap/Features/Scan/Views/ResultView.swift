@@ -14,10 +14,13 @@ struct ResultView: View {
     @State private var kidsCollapsed: Bool = false
     @State private var dogsCollapsed: Bool = true
     @State private var catsCollapsed: Bool = true
+    @State private var isSharing: Bool = false
+    @State private var shareError: String?
 
     struct SharePayload: Identifiable { let id = UUID(); let items: [Any] }
 
     @ObservedObject var vm: RecognitionResultViewModel
+    @StateObject private var shareService = ShareService()
 
     // Measures the overlay header height so we can offset the scroll content
     private struct HeaderHeightKey: PreferenceKey {
@@ -104,13 +107,33 @@ struct ResultView: View {
     private func shareButton() -> some View {
         HStack {
             Spacer()
-            Button { prepareShare() } label: {
-                Text("Share").font(.headline)
+            Button {
+                Task { await prepareShareWithURL() }
+            } label: {
+                HStack(spacing: 6) {
+                    if isSharing {
+                        ProgressView()
+                            .scaleEffect(0.8)
+                    }
+                    Text(isSharing ? "Preparing…" : "Share")
+                        .font(.headline)
+                }
             }
             .buttonStyle(.borderedProminent)
             .controlSize(.regular)
             .padding(.trailing)
             .accessibilityLabel("Share")
+            .disabled(isSharing)
+        }
+        .alert("Share Error", isPresented: .init(
+            get: { shareError != nil },
+            set: { if !$0 { shareError = nil } }
+        )) {
+            Button("OK") { shareError = nil }
+        } message: {
+            if let error = shareError {
+                Text(error)
+            }
         }
     }
 
@@ -496,6 +519,47 @@ struct ResultView: View {
     }
 
     // MARK: — Share helpers
+    
+    /// Share with backend URL generation
+    private func prepareShareWithURL() async {
+        isSharing = true
+        shareError = nil
+        
+        do {
+            let result = try await shareService.shareAnalysis(
+                analysis: vm.analysis,
+                image: resolvedImage,
+                productName: vm.productName,
+                category: vm.category
+            )
+            
+            // Create share items with URL
+            var items: [Any] = []
+            let selected10 = score10(fromHundred: vm.overallScoreHundred)
+            let focusLabel: String = {
+                switch vm.selectedSection {
+                case .children: return "Kids"
+                case .dogs:     return "Dogs"
+                case .cats:     return "Cats"
+                }
+            }()
+            let summary = "SafeSnap — \(vm.productName) (\(vm.category)) — Safety: \(selected10)/10 (\(focusLabel))\n\nView full report: \(result.shareURL.absoluteString)"
+            items.append(summary)
+            items.append(result.shareURL)
+            
+            await MainActor.run {
+                sharePayload = SharePayload(items: items)
+                isSharing = false
+            }
+        } catch {
+            await MainActor.run {
+                shareError = error.localizedDescription
+                isSharing = false
+            }
+        }
+    }
+    
+    /// Legacy local-only share (fallback)
     private func prepareShare() {
         var items: [Any] = []
         let selected10 = score10(fromHundred: vm.overallScoreHundred)
