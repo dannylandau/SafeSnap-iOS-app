@@ -13,6 +13,10 @@ final class PreviewUserSession: UserSession {
 
     var isSignedInPublisher: Published<Bool>.Publisher { $isSignedIn }
 
+    func getIdToken() async throws -> String? {
+        return isSignedIn ? "preview-mock-token" : nil
+    }
+
     func signOut() async throws {
         isSignedIn = false
     }

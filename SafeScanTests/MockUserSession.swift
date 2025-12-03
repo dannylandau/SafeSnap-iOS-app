@@ -17,5 +17,11 @@ final class MockUserSession: UserSession, ObservableObject {
     var memberSince: String? = "Feb 1974"
     var avatarURL: URL? = nil
     var userId: String? = "test-id"
+    var mockIdToken: String? = "mock-test-token"
+    
+    func getIdToken() async throws -> String? {
+        return isSignedIn ? mockIdToken : nil
+    }
+    
     func signOut() async throws {}
 }
