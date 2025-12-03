@@ -5,35 +5,58 @@
 //  Created by Marcin Grześkowiak on 23/07/2025.
 //
 
-
 import Foundation
 import FirebaseAuth
 
 @MainActor
 final class AppDependencies {
-    // Shared instances
-    let geminiService: GeminiService
-    let ragService: RAGService
-    let historyService: ScanHistoryService
-    let visionService: VisionService
-    let openAIService: OpenAIService
+    
+    // MARK: - Core Services
+    
     let userSession: UserSession
     let onboardingState: OnboardingStateStore
+    
+    // MARK: - API Services (Backend-based)
+    
+    let apiService: SafeSnapAPIService
+    let storageService: FirebaseStorageService
+    let analysisService: BackendAnalysisService
+    let historyService: ScanHistoryService
+    
+    // MARK: - Init
+    
     init(userSession: UserSession) {
-        self.geminiService = GeminiService(apiKey: Bundle.main.infoDictionaryValue(for: "GoogleGeminiAPIKey")!)
-        self.ragService = RAGService()
+        self.userSession = userSession
+        self.onboardingState = OnboardingStateStore()
+        
+        // Configure API service with token provider
+        self.apiService = SafeSnapAPIService(
+            environment: .production,
+            tokenProvider: { [weak userSession] in
+                try await userSession?.getIdToken()
+            }
+        )
+        
+        // Storage service for image uploads
+        self.storageService = FirebaseStorageService.shared
+        
+        // Analysis service using backend API
+        self.analysisService = BackendAnalysisService(
+            apiService: apiService,
+            storageService: storageService,
+            userSession: userSession
+        )
+        
+        // History service (will sync with backend when user is signed in)
         self.historyService = ScanHistoryService()
         self.historyService.load()
-        self.userSession = userSession
-        self.openAIService = OpenAIService(apiKey: Bundle.main.infoDictionaryValue(for: "OpenAIAPIKey")!) // TODO: Handle missing key gracefully
-        self.visionService = VisionService(apiKey: Bundle.main.infoDictionaryValue(for: "GoogleVisionAPIKey")!) // TODO: Handle missing key gracefully
-        self.onboardingState = OnboardingStateStore()
     }
 
     convenience init(auth: Auth = Auth.auth()) {
         self.init(userSession: FirebaseUserSession(auth: auth))
     }
 
-    // Shared access point
+    // MARK: - Shared Instance
+    
     static var shared = AppDependencies()
 }

@@ -72,6 +72,15 @@ private actor FileScanImageStore: ScanImageStoring {
     }
 }
 
+/// Analysis phase enumeration
+enum AnalysisPhase: Equatable {
+    case preparing
+    case analyzing
+    case uploading
+    case savingHistory
+    case report
+}
+
 enum ScanError: Identifiable, LocalizedError {
     case visionFailed(reason: String, underlying: Error? = nil)
     case openAIFailed(reason: String, underlying: Error? = nil)
@@ -149,6 +158,9 @@ extension SafetyOptions {
 
 @MainActor
 final class ScanAnalysisCoordinator: ObservableObject {
+    
+    // MARK: - Published State
+    
     @Published var currentPhase: AnalysisPhase = .preparing
     @Published var isComplete: Bool = false
     @Published var stage: SafetyAnalyzer.Stage = .vision
@@ -160,22 +172,25 @@ final class ScanAnalysisCoordinator: ObservableObject {
     @Published var partial: String? = nil
     @Published var scanError: ScanError?
     
-    private let analyzer: SafetyAnalyzing
-    private let visionService: VisionServiceType
-    private let historyService: ScanHistoryRecording
-    private let imageStore: ScanImageStoring
-    
-    private var safetyAnalysis: SafetyAnalysisResponse?
-    private var thumbnail: UIImage?
-    private var currentRequest: SafetyAnalysisRequest?
-    private var runningTask: Task<SafetyAnalysisResponse, Error>? = nil
-    
     @Published var latestHistoryItem: ScanHistoryItem?
+    @Published var latestProductAnalysis: ProductAnalysis?
     @Published var resultDTO: GeminiSafetyDTO? = nil
     @Published var explainability: AnalysisExtras? = nil
     @Published var visionBestGuess: String? = nil
     @Published var visionWebEntities: [String] = []
-
+    
+    // MARK: - Dependencies
+    
+    private let apiService: SafeSnapAPIService
+    private let storageService: ImageStorageService
+    private let historyService: ScanHistoryRecording
+    private let imageStore: ScanImageStoring
+    private let userSession: UserSession?
+    
+    private var safetyAnalysis: SafetyAnalysisResponse?
+    
+    // MARK: - Publishers
+    
     var stagePublisher: AnyPublisher<SafetyAnalyzer.Stage, Never> {
         $stage.eraseToAnyPublisher()
     }
@@ -192,24 +207,133 @@ final class ScanAnalysisCoordinator: ObservableObject {
         $visionWebEntities.eraseToAnyPublisher()
     }
     
-    convenience init(geminiService: GeminiService, visionService: VisionServiceType, historyService: ScanHistoryService) {
-        self.init(analyzer: geminiService, visionService: visionService, historyService: historyService)
-    }
-
+    // MARK: - Init
+    
     init(
-        analyzer: SafetyAnalyzing,
-        visionService: VisionServiceType,
+        apiService: SafeSnapAPIService = .shared,
+        storageService: ImageStorageService = FirebaseStorageService.shared,
         historyService: ScanHistoryRecording,
-        imageStore: ScanImageStoring = FileScanImageStore()
+        imageStore: ScanImageStoring = FileScanImageStore(),
+        userSession: UserSession? = nil
     ) {
-        self.analyzer = analyzer
-        self.visionService = visionService
+        self.apiService = apiService
+        self.storageService = storageService
         self.historyService = historyService
         self.imageStore = imageStore
+        self.userSession = userSession
     }
     
+    // MARK: - Main Analysis Flow
+    
+    /// Start analysis using backend API
+    /// The backend handles both vision recognition and safety analysis in one call
     @MainActor
     func startGeminiScan(image: UIImage, options: SafetyOptions) async throws {
+        resetState()
+        
+        let analysisStart = ContinuousClock.now
+        
+        // Phase 1: Call backend API for analysis
+        currentPhase = .analyzing
+        stage = .fast
+        partial = "Analyzing product safety…"
+        
+        let productAnalysis: ProductAnalysis
+        do {
+            productAnalysis = try await apiService.analyze(
+                image: image,
+                includeDogs: options.includeDogs,
+                includeCats: options.includeCats,
+                includeChildren: options.includeChildren
+            )
+        } catch {
+            throw ScanError.openAIFailed(reason: error.localizedDescription, underlying: error)
+        }
+        
+        // Store the product analysis
+        self.latestProductAnalysis = productAnalysis
+        
+        // Update timing
+        fastDuration = seconds(analysisStart.duration(to: ContinuousClock.now))
+        smartDuration = fastDuration
+        
+        // Update UI state from analysis
+        visionBestGuess = productAnalysis.name
+        modelconfidence = productAnalysis.analysisMetadata?.modelConfidence
+        
+        // Convert to legacy SafetyAnalysisResponse for backward compatibility
+        let result = convertToSafetyAnalysisResponse(productAnalysis, options: options)
+        self.safetyAnalysis = result
+        
+        // Build explainability extras
+        self.explainability = buildExtras(from: productAnalysis)
+        
+        // Build DTO for ResultView
+        self.resultDTO = buildDTO(from: result, productAnalysis: productAnalysis, options: options)
+        
+        self.stage = .smart
+        
+        // Phase 2: Save locally
+        partial = "Saving to history…"
+        let imageData = image.jpegData(compressionQuality: 0.9) ?? Data()
+        
+        // Persist image locally
+        let storeResult = try await imageStore.persist(image: image, data: imageData)
+        
+        // Build local history item
+        let toggles = ScanHistoryItem.UserToggles(
+            includeDogs: options.includeDogs,
+            includeCats: options.includeCats,
+            includeChildren: options.includeChildren
+        )
+        
+        let product = ProductIdentification(
+            productType: productAnalysis.category,
+            productName: productAnalysis.name,
+            brandCandidates: [],
+            labels: [],
+            objects: [],
+            detectedText: nil,
+            confidence: productAnalysis.analysisMetadata?.recognitionConfidence ?? 0.85,
+            bestGuess: productAnalysis.name,
+            webEntities: []
+        )
+        
+        let item = ScanHistoryBuilder.build(
+            product: product,
+            analysis: result,
+            imageRef: storeResult.imageURL,
+            imageData: imageData,
+            userToggles: toggles,
+            visionContextRef: nil,
+            model: "safesnap-backend",
+            promptVersion: "v1-api"
+        )
+        
+        self.historyService.add(item)
+        self.latestHistoryItem = item
+        
+        // Phase 3: Sync to backend if user is signed in (background)
+        if userSession?.isSignedIn == true {
+            Task {
+                await syncToBackend(productAnalysis: productAnalysis, image: image, options: options)
+            }
+        }
+        
+        // Complete
+        self.isComplete = true
+        self.currentPhase = .report
+        self.partial = nil
+    }
+
+    func cancelAnalysis() {
+        // API calls can't be cancelled easily, but we can reset state
+        resetState()
+    }
+    
+    // MARK: - Private Helpers
+    
+    private func resetState() {
         stage = .vision
         partial = nil
         visionBestGuess = nil
@@ -217,209 +341,178 @@ final class ScanAnalysisCoordinator: ObservableObject {
         visionDuration = nil
         fastDuration = nil
         smartDuration = nil
-        let visionStart = ContinuousClock.now
-        // Run Vision off-main to avoid blocking UI presentation.
-        let vs = visionService
-        let visionResult: VisionAnalysisResult = try await offMain {
-            try await vs.analyze(image: image)
+        isComplete = false
+        currentPhase = .preparing
+    }
+    
+    /// Sync analysis to backend (upload image + save history) - runs in background
+    private func syncToBackend(productAnalysis: ProductAnalysis, image: UIImage, options: SafetyOptions) async {
+        do {
+            // Upload image to Firebase Storage
+            let imageUrl = try await storageService.uploadAnalysisImage(image: image, analysisId: productAnalysis.id)
+            
+            // Create API history item with image URL
+            let historyItem = BackendAnalysisService.makeHistoryItem(
+                from: productAnalysis,
+                imageUrl: imageUrl,
+                options: options
+            )
+            
+            // Save to backend history
+            _ = try await apiService.saveToHistory(item: historyItem)
+            
+            #if DEBUG
+            print("✅ Successfully synced analysis \(productAnalysis.id) to backend")
+            #endif
+        } catch {
+            #if DEBUG
+            print("⚠️ Failed to sync to backend: \(error.localizedDescription)")
+            #endif
+            // Don't throw - this is background sync, local history is already saved
         }
-        visionGuess = visionResult.guess
-        visionDuration = seconds(visionStart.duration(to: ContinuousClock.now))
-        let trimmedBest = visionResult.bestGuess?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-        visionBestGuess = trimmedBest.isEmpty ? visionResult.guess.name : trimmedBest
-        visionWebEntities = visionResult.webEntities
-
-        currentPhase = .openAI
-        stage = .fast
-
-        let labels = visionResult.labels
-        let ocrHits = extractOCRHits(from: visionResult.detectedText)
-        let visionContext = VisionContextPayload(
-            guessName: visionResult.guess.name,
-            guessType: visionResult.guess.type,
-            confidence: visionResult.guess.confidence,
-            brandCandidates: visionResult.brandCandidates,
-            labels: labels,
-            objects: visionResult.objects,
-            detectedText: visionResult.detectedText,
-            sanitizedContext: visionResult.sanitizedContext,
-            bestGuess: visionResult.bestGuess,
-            webEntities: visionResult.webEntities
+    }
+    
+    /// Convert ProductAnalysis (API model) to SafetyAnalysisResponse (legacy model)
+    private func convertToSafetyAnalysisResponse(_ analysis: ProductAnalysis, options: SafetyOptions) -> SafetyAnalysisResponse {
+        let kidSafety = analysis.analysis.kidSafety
+        let petSafety = analysis.analysis.petSafety
+        
+        // Extract dog warnings
+        let dogWarnings: [SafetyAnalysisResponse.PetWarning] = petSafety.dogs?.details?.map { detail in
+            SafetyAnalysisResponse.PetWarning(
+                severity: Severity(rawValue: detail.severity.rawValue) ?? .medium,
+                warning: detail.warning,
+                reason: detail.reason
+            )
+        } ?? []
+        
+        // Extract cat warnings
+        let catWarnings: [SafetyAnalysisResponse.PetWarning] = petSafety.cats?.details?.map { detail in
+            SafetyAnalysisResponse.PetWarning(
+                severity: Severity(rawValue: detail.severity.rawValue) ?? .medium,
+                warning: detail.warning,
+                reason: detail.reason
+            )
+        } ?? []
+        
+        // Convert general safety
+        let generalPros = analysis.analysis.generalSafety?.pros.map { point in
+            SafetyAnalysisResponse.LabeledItem(
+                label: point.label,
+                severity: Severity(rawValue: point.severity) ?? .low,
+                category: point.category
+            )
+        } ?? []
+        
+        let generalCons = analysis.analysis.generalSafety?.cons.map { point in
+            SafetyAnalysisResponse.LabeledItem(
+                label: point.label,
+                severity: Severity(rawValue: point.severity) ?? .medium,
+                category: point.category
+            )
+        } ?? []
+        
+        // Convert hygiene warnings
+        let hygieneWarnings = analysis.analysis.hygiene.warnings?.map { warning in
+            SafetyAnalysisResponse.HygieneWarning(type: warning.type, message: warning.message)
+        } ?? []
+        
+        // Convert recalls
+        let recalls = analysis.analysis.recalls.map { recall in
+            SafetyAnalysisResponse.Recall(
+                date: recall.date,
+                reason: recall.reason,
+                severity: Severity(rawValue: recall.severity) ?? .medium,
+                source: recall.source
+            )
+        }
+        
+        return SafetyAnalysisResponse(
+            productName: analysis.name,
+            productType: analysis.category,
+            overallSafetyScore: analysis.safetyScore.overall,
+            childSafetyScore: kidSafety.score ?? analysis.safetyScore.overall,
+            dogSafetyScore: options.includeDogs ? petSafety.dogs?.score : nil,
+            catSafetyScore: options.includeCats ? petSafety.cats?.score : nil,
+            modelConfidence: analysis.analysisMetadata?.modelConfidence ?? 0.85,
+            recognitionConfidence: analysis.analysisMetadata?.recognitionConfidence ?? 0.90,
+            generalSafety: SafetyAnalysisResponse.GeneralSafety(pros: generalPros, cons: generalCons),
+            petSafety: SafetyAnalysisResponse.PetSafety(dogs: dogWarnings, cats: catWarnings),
+            hygieneWarnings: hygieneWarnings,
+            recalls: recalls,
+            kidPros: kidSafety.benefits,
+            kidCons: kidSafety.concerns,
+            kidNarrative: kidSafety.narrative ?? "",
+            dogPros: petSafety.dogs?.pros,
+            dogCons: petSafety.dogs?.cons,
+            dogNarrative: petSafety.dogs?.narrative,
+            catPros: petSafety.cats?.pros,
+            catCons: petSafety.cats?.cons,
+            catNarrative: petSafety.cats?.narrative
         )
-
-        let fastStart = ContinuousClock.now
-        let analyzed = try await analyzer.analyzeSafetyWithExtras(
-            image: image,
-            options: options,
-            streamToken: { [weak self] token in
-                Task { @MainActor in self?.partial = token }
-            },
-            visionLabels: labels,
-            ocrHits: ocrHits,
-            visionContext: visionContext
+    }
+    
+    /// Build AnalysisExtras from ProductAnalysis
+    private func buildExtras(from analysis: ProductAnalysis) -> AnalysisExtras {
+        let metadata = analysis.analysisMetadata
+        return AnalysisExtras(
+            evidence: SafetyEvidence(labels: [], ocrHits: []),
+            policy: PolicyOutcome(
+                canonicalCategory: metadata?.canonicalCategory ?? analysis.category,
+                rulesTriggered: metadata?.rulesTriggered ?? []
+            )
         )
-        fastDuration = seconds(fastStart.duration(to: ContinuousClock.now))
-        let result = analyzed.response
-        self.explainability = analyzed.extras
-        self.modelconfidence = result.modelConfidence
-        self.stage = .smart
-        self.smartDuration = fastDuration
-
-        // Build a lightweight DTO for the ResultView/VM
+    }
+    
+    /// Build GeminiSafetyDTO for ResultView
+    private func buildDTO(from result: SafetyAnalysisResponse, productAnalysis: ProductAnalysis, options: SafetyOptions) -> GeminiSafetyDTO {
         let childConf = Int((result.modelConfidence * 100.0).rounded()).clamped(to: 0...100)
-        if result.kidPros.isEmpty || result.kidCons.isEmpty {
-            print("ScanAnalysisCoordinator warning: kidPros/kidCons empty; check Gemini prompt.")
-        }
-        if result.kidNarrative.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-            print("ScanAnalysisCoordinator warning: kidNarrative empty; check Gemini prompt.")
-        }
-        let kidPros = result.kidPros
-        let kidCons = result.kidCons
-        let kidNarrativeTrimmed = result.kidNarrative.trimmingCharacters(in: .whitespacesAndNewlines)
-        let kidNarrative = kidNarrativeTrimmed.isEmpty ? nil : kidNarrativeTrimmed
-
+        
         func cleaned(_ values: [String]?) -> [String] {
             guard let values else { return [] }
-            let trimmed = values.map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }.filter { !$0.isEmpty }
-            return Array(trimmed.prefix(3))
+            return Array(values.map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }.filter { !$0.isEmpty }.prefix(3))
         }
-
-        let dogPros: [String]
-        let dogCons: [String]
-        let dogNarrative: String?
-        if options.includeDogs {
-            dogPros = cleaned(result.dogPros)
-            dogCons = cleaned(result.dogCons)
-            let narrative = result.dogNarrative?.trimmingCharacters(in: .whitespacesAndNewlines)
-            dogNarrative = narrative?.isEmpty == true ? nil : narrative
-            if dogPros.isEmpty || dogCons.isEmpty || dogNarrative == nil {
-                print("ScanAnalysisCoordinator warning: dog explainability incomplete; check Gemini prompt.")
-            }
-        } else {
-            dogPros = []
-            dogCons = []
-            dogNarrative = nil
+        
+        let kidNarrative = result.kidNarrative.trimmingCharacters(in: .whitespacesAndNewlines)
+        
+        let dogWarns = result.petSafety.dogs.map {
+            GeminiSafetyDTO.PetWarn(severity: $0.severity.rawValue, title: $0.warning, reason: $0.reason)
         }
-
-        let catPros: [String]
-        let catCons: [String]
-        let catNarrative: String?
-        if options.includeCats {
-            catPros = cleaned(result.catPros)
-            catCons = cleaned(result.catCons)
-            let narrative = result.catNarrative?.trimmingCharacters(in: .whitespacesAndNewlines)
-            catNarrative = narrative?.isEmpty == true ? nil : narrative
-            if catPros.isEmpty || catCons.isEmpty || catNarrative == nil {
-                print("ScanAnalysisCoordinator warning: cat explainability incomplete; check Gemini prompt.")
-            }
-        } else {
-            catPros = []
-            catCons = []
-            catNarrative = nil
+        let catWarns = result.petSafety.cats.map {
+            GeminiSafetyDTO.PetWarn(severity: $0.severity.rawValue, title: $0.warning, reason: $0.reason)
         }
-        let dogWarns = result.petSafety.dogs.map { GeminiSafetyDTO.PetWarn(severity: $0.severity.rawValue, title: $0.warning, reason: $0.reason) }
-        let catWarns = result.petSafety.cats.map { GeminiSafetyDTO.PetWarn(severity: $0.severity.rawValue, title: $0.warning, reason: $0.reason) }
-        let dto = GeminiSafetyDTO(
-            productName: result.productName ?? visionResult.guess.name,
-            canonicalCategory: analyzed.extras.policy.canonicalCategory,
+        
+        return GeminiSafetyDTO(
+            productName: result.productName,
+            canonicalCategory: productAnalysis.analysisMetadata?.canonicalCategory,
             childScore: result.childSafetyScore,
             dogScore: result.dogSafetyScore,
             catScore: result.catSafetyScore,
             childConfidence: childConf,
             dogConfidence: nil,
             catConfidence: nil,
-            kidPros: kidPros,
-            kidCons: kidCons,
-            kidNarrative: kidNarrative,
-            dogPros: dogPros,
-            dogCons: dogCons,
-            dogNarrative: dogNarrative,
-            catPros: catPros,
-            catCons: catCons,
-            catNarrative: catNarrative,
+            kidPros: cleaned(result.kidPros),
+            kidCons: cleaned(result.kidCons),
+            kidNarrative: kidNarrative.isEmpty ? nil : kidNarrative,
+            dogPros: options.includeDogs ? cleaned(result.dogPros) : [],
+            dogCons: options.includeDogs ? cleaned(result.dogCons) : [],
+            dogNarrative: options.includeDogs ? result.dogNarrative : nil,
+            catPros: options.includeCats ? cleaned(result.catPros) : [],
+            catCons: options.includeCats ? cleaned(result.catCons) : [],
+            catNarrative: options.includeCats ? result.catNarrative : nil,
             dogWarnings: dogWarns,
             catWarnings: catWarns,
-            labels: analyzed.extras.evidence.labels,
-            ocrHits: analyzed.extras.evidence.ocrHits,
-            rulesTriggered: analyzed.extras.policy.rulesTriggered,
-            dataSources: ["Google Vision", "SafeSnap Toxicity Service"]
+            labels: [],
+            ocrHits: [],
+            rulesTriggered: productAnalysis.analysisMetadata?.rulesTriggered ?? [],
+            dataSources: ["SafeSnap Backend API"]
         )
-        self.resultDTO = dto
-
-        // Persist image and build history item
-        let imageData: Data = try await offMain {
-            image.jpegData(compressionQuality: 0.9) ?? Data()
-        }
-        self.safetyAnalysis = result
-
-        // Map options to history toggles
-        let toggles = ScanHistoryItem.UserToggles(
-            includeDogs: options.includeDogs,
-            includeCats: options.includeCats,
-            includeChildren: options.includeChildren
-        )
-
-        let storeResult = try await imageStore.persist(image: image, data: imageData)
-        let imageURL = storeResult.imageURL
-        // Persisted image at: \(imageURL.lastPathComponent), thumb: \(storeResult.thumbnailURL.lastPathComponent) size: \(Int(storeResult.pixelSize.width))x\(Int(storeResult.pixelSize.height))
-
-        // Prefer canonical category from policy extras if available
-        let canonicalType = analyzed.extras.policy.canonicalCategory ?? result.productType
-        let product = ProductIdentification(
-            productType: canonicalType,
-            productName: visionResult.guess.name,
-            brandCandidates: visionResult.brandCandidates,
-            labels: labels,
-            objects: visionResult.objects,
-            detectedText: visionResult.detectedText,
-            confidence: visionResult.confidence,
-            bestGuess: visionResult.bestGuess,
-            webEntities: visionResult.webEntities
-        )
-
-        let item = ScanHistoryBuilder.build(
-            product: product,
-            analysis: result,
-            imageRef: imageURL,
-            imageData: imageData,
-            userToggles: toggles,
-            visionContextRef: nil,
-            model: "rag-toxic-check",
-            promptVersion: "v1-rag"
-        )
-        self.historyService.add(item)
-        self.latestHistoryItem = item
-        self.isComplete = true
-        
-        // Advance phase to report for UI to render
-        self.currentPhase = .report
     }
-
-    func cancelAnalysis() {
-        analyzer.cancelAnalysis()
-        currentPhase = .preparing
-    }
-
-    // Run async work on a detached, background-priority task and return to caller.
-    private func offMain<T>(_ work: @escaping () async throws -> T) async throws -> T {
-        return try await Task.detached(priority: .userInitiated) {
-            try await work()
-        }.value
-    }
-
+    
     private func seconds(_ duration: Duration) -> Double {
         let components = duration.components
         let attosecondsPerSecond = 1_000_000_000_000_000_000.0
         return Double(components.seconds) + Double(components.attoseconds) / attosecondsPerSecond
-    }
-
-    private func extractOCRHits(from text: String?) -> [String] {
-        guard let text = text, !text.isEmpty else { return [] }
-        let separators = CharacterSet.newlines.union(.punctuationCharacters)
-        return text
-            .components(separatedBy: separators)
-            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
-            .filter { !$0.isEmpty }
     }
 }
 
