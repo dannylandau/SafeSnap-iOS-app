@@ -57,6 +57,11 @@ final class FirebaseUserSession: UserSession {
 
     var isSignedInPublisher: Published<Bool>.Publisher { $isSignedIn }
 
+    func getIdToken() async throws -> String? {
+        guard let user = currentUser else { return nil }
+        return try await user.getIDToken()
+    }
+
     func signOut() async throws {
         try auth.signOut()
     }

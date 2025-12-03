@@ -16,5 +16,10 @@ protocol UserSession: AnyObject {
     var userId: String? { get }
     var isSignedIn: Bool { get }
     var isSignedInPublisher: Published<Bool>.Publisher { get }
+    
+    /// Returns the Firebase ID token for API authentication
+    /// Returns nil if user is not signed in
+    func getIdToken() async throws -> String?
+    
     func signOut() async throws
 }
