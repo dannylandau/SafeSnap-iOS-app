@@ -15,11 +15,10 @@ protocol ScanAnalysisCoordinating: AnyObject {
     func startGeminiScan(image: UIImage, options: SafetyOptions) async throws
     func cancelAnalysis()
     var latestHistoryItem: ScanHistoryItem? { get }
-    var stage: SafetyAnalyzer.Stage { get }
+    var stage: AnalysisStage { get }
     var fastDuration: TimeInterval? { get }
-    var visionDuration: TimeInterval? { get }
     var smartDuration: TimeInterval? { get }
-    var stagePublisher: AnyPublisher<SafetyAnalyzer.Stage, Never> { get }
+    var stagePublisher: AnyPublisher<AnalysisStage, Never> { get }
     var partialPublisher: AnyPublisher<String?, Never> { get }
     var visionBestGuessPublisher: AnyPublisher<String?, Never> { get }
     var visionWebEntitiesPublisher: AnyPublisher<[String], Never> { get }
@@ -34,7 +33,7 @@ final class ScanViewModel: ObservableObject {
     @Published var scanError: ScanError? = nil
     @Published var scanDurationText: String? = nil
     @Published private(set) var scanDurationEnabled: Bool
-    @Published private(set) var stage: SafetyAnalyzer.Stage = .vision
+    @Published private(set) var stage: AnalysisStage = .vision
     @Published private(set) var partialStatus: String? = nil
     @Published private(set) var visionBestGuess: String? = nil
     @Published private(set) var visionWebEntities: [String] = []

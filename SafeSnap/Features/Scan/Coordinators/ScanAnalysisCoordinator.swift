@@ -163,18 +163,16 @@ final class ScanAnalysisCoordinator: ObservableObject {
     
     @Published var currentPhase: AnalysisPhase = .preparing
     @Published var isComplete: Bool = false
-    @Published var stage: SafetyAnalyzer.Stage = .vision
-    @Published var visionDuration: Double? = nil
+    @Published var stage: AnalysisStage = .vision
     @Published var fastDuration: Double? = nil
     @Published var smartDuration: Double? = nil
-    @Published var visionGuess: ProductGuess? = nil
     @Published var modelconfidence: Double? = nil
     @Published var partial: String? = nil
     @Published var scanError: ScanError?
     
     @Published var latestHistoryItem: ScanHistoryItem?
     @Published var latestProductAnalysis: ProductAnalysis?
-    @Published var resultDTO: GeminiSafetyDTO? = nil
+    @Published var resultDTO: SafetyDTO? = nil
     @Published var explainability: AnalysisExtras? = nil
     @Published var visionBestGuess: String? = nil
     @Published var visionWebEntities: [String] = []
@@ -191,7 +189,7 @@ final class ScanAnalysisCoordinator: ObservableObject {
     
     // MARK: - Publishers
     
-    var stagePublisher: AnyPublisher<SafetyAnalyzer.Stage, Never> {
+    var stagePublisher: AnyPublisher<AnalysisStage, Never> {
         $stage.eraseToAnyPublisher()
     }
 
@@ -352,11 +350,7 @@ final class ScanAnalysisCoordinator: ObservableObject {
             let imageUrl = try await storageService.uploadAnalysisImage(image: image, analysisId: productAnalysis.id)
             
             // Create API history item with image URL
-            let historyItem = BackendAnalysisService.makeHistoryItem(
-                from: productAnalysis,
-                imageUrl: imageUrl,
-                options: options
-            )
+            let historyItem = makeAPIHistoryItem(from: productAnalysis, imageUrl: imageUrl, options: options)
             
             // Save to backend history
             _ = try await apiService.saveToHistory(item: historyItem)
@@ -370,6 +364,34 @@ final class ScanAnalysisCoordinator: ObservableObject {
             #endif
             // Don't throw - this is background sync, local history is already saved
         }
+    }
+    
+    /// Create API history item from ProductAnalysis
+    private func makeAPIHistoryItem(
+        from analysis: ProductAnalysis,
+        imageUrl: String?,
+        options: SafetyOptions
+    ) -> SafeSnapAPIService.APIHistoryItem {
+        let dateFormatter = ISO8601DateFormatter()
+        dateFormatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        
+        return SafeSnapAPIService.APIHistoryItem(
+            id: analysis.id,
+            createdAt: dateFormatter.string(from: Date()),
+            name: analysis.name,
+            score: analysis.safetyScore.overall,
+            maxScore: analysis.safetyScore.maxScore,
+            preview: nil,
+            imageUrl: imageUrl,
+            labels: [],
+            category: analysis.category,
+            petSafetyOptions: PetSafetyOptions(
+                includeDogs: options.includeDogs,
+                includeCats: options.includeCats,
+                includeChildren: options.includeChildren
+            ),
+            fullAnalysis: analysis
+        )
     }
     
     /// Convert ProductAnalysis (API model) to SafetyAnalysisResponse (legacy model)
