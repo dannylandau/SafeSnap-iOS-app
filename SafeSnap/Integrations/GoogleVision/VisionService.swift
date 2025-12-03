@@ -1,3 +1,11 @@
+//
+//  VisionService.swift
+//  SafeSnap
+//
+//  DEPRECATED: Vision analysis is now handled by the backend API.
+//  Keeping for reference and potential fallback scenarios.
+//
+
 import Foundation
 import CoreGraphics
 import UIKit
