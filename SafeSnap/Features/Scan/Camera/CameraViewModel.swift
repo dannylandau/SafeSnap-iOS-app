@@ -15,9 +15,11 @@ class CameraViewModel: NSObject, ObservableObject, AVCapturePhotoCaptureDelegate
 
     private var output = AVCapturePhotoOutput()
 
-    override init() {
+    init(startSession: Bool = true) {
         super.init()
-        setupSession()
+        if startSession {
+            setupSession()
+        }
     }
 
     func setupSession() {

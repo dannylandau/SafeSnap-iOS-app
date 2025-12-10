@@ -28,7 +28,7 @@ enum ScanPhase: Equatable {
 
 struct ScanView: View {
     @StateObject private var viewModel: ScanViewModel
-    @StateObject private var cameraViewModel = CameraViewModel()
+    @StateObject private var cameraViewModel: CameraViewModel
     @AppStorage("includeDogSafety") private var includeDog = false
     @AppStorage("includeCatSafety") private var includeCat = false
     @State private var selectedPhoto: PhotosPickerItem?
@@ -43,10 +43,12 @@ struct ScanView: View {
     init(
         viewModel: ScanViewModel,
         userSession: UserSession,
+        cameraViewModel: @autoclosure @escaping () -> CameraViewModel = CameraViewModel(),
         onShowHistory: @escaping () -> Void,
         onShowAccount: @escaping () -> Void
     ) {
         _viewModel = StateObject(wrappedValue: viewModel)
+        _cameraViewModel = StateObject(wrappedValue: cameraViewModel())
         self.userSession = userSession
         self.onShowHistory = onShowHistory
         self.onShowAccount = onShowAccount
@@ -54,7 +56,7 @@ struct ScanView: View {
 
     var body: some View {
         ZStack {
-            Color(uiColor: .systemGray6).ignoresSafeArea()
+//            Color(uiColor: .systemGray6).ignoresSafeArea()
 
             Group {
                 switch cameraState {
@@ -155,7 +157,7 @@ struct ScanView: View {
                             .foregroundColor(.white.opacity(0.85))
                             .padding(.bottom, 8)
                     } else {
-                        analyzingProgress
+//                        analyzingProgress
                     }
 
                     ScanBottomControlsView(

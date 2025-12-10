@@ -1,8 +1,8 @@
 //
 //  SafeSnapAPIService.swift
-//  SafeSnap
+//  Archie
 //
-//  Centralized API client for SafeSnap backend
+//  Centralized API client for Archie backend
 //
 
 import Foundation
@@ -388,38 +388,12 @@ final class SafeSnapAPIService {
     
     // MARK: - Sharing API
     
-    struct ShareCacheRequest: Encodable {
-        let analysis: ProductAnalysis
-    }
-    
-    struct ShareCacheResponse: Decodable {
-        let success: Bool
-        let message: String
-    }
-    
-    func cacheForSharing(analysis: ProductAnalysis) async throws -> ShareCacheResponse {
-        let request = ShareCacheRequest(analysis: analysis)
-        let body = try JSONEncoder().encode(request)
-        
-        return try await makeRequest(
-            endpoint: "/api/share-cache",
-            method: "POST",
-            body: body,
-            responseType: ShareCacheResponse.self
-        )
-    }
-    
+    /// Fetch a shared analysis by ID
     func getSharedAnalysis(id: String) async throws -> ProductAnalysis {
         return try await makeRequest(
             endpoint: "/api/analysis/\(id)",
             responseType: ProductAnalysis.self
         )
-    }
-    
-    // MARK: - Share URL Generation
-    
-    func generateShareURL(for analysisId: String) -> URL? {
-        return URL(string: "https://archieml.com/share/\(analysisId)")
     }
 }
 

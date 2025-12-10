@@ -21,11 +21,6 @@ struct ScanHeroHeaderView: View {
             ScanCategoryGridView(categories: categories)
         }
         .padding(24)
-        .background(
-            RoundedRectangle(cornerRadius: 32, style: .continuous)
-                .fill(.background)
-                .shadow(color: Color.black.opacity(0.08), radius: 30, x: 0, y: 20)
-        )
     }
 
     private var headerRow: some View {
@@ -55,23 +50,7 @@ struct ScanHeroHeaderView: View {
 
     private var logoSection: some View {
         VStack(spacing: 12) {
-            if UIImage(named: "icon") != nil {
-                Image("icon")
-                    .resizable()
-                    .scaledToFit()
-                    .frame(width: 80, height: 80)
-                    .padding(.top, 8)
-                    .accessibilityHidden(true)
-            } else {
-                Image(systemName: "icon")
-                    .font(.system(size: 48))
-                    .foregroundColor(.green)
-                    .padding(.top, 8)
-                    .accessibilityHidden(true)
-            }
-
-            Text("SafeSnap")
-                .font(.system(size: 34, weight: .bold))
+            Image("archie")
 
             Text("AI-powered product safety analysis")
                 .font(.subheadline)
