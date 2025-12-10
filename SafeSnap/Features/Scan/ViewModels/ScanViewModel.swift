@@ -22,6 +22,7 @@ protocol ScanAnalysisCoordinating: AnyObject {
     var partialPublisher: AnyPublisher<String?, Never> { get }
     var visionBestGuessPublisher: AnyPublisher<String?, Never> { get }
     var visionWebEntitiesPublisher: AnyPublisher<[String], Never> { get }
+    var latestProductAnalysis: ProductAnalysis? { get }
 }
 
 extension ScanAnalysisCoordinator: ScanAnalysisCoordinating {}
