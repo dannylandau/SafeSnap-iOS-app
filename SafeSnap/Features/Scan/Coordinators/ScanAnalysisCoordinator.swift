@@ -370,11 +370,11 @@ final class ScanAnalysisCoordinator: ObservableObject {
         from analysis: ProductAnalysis,
         imageUrl: String?,
         options: SafetyOptions
-    ) -> SafeSnapAPIService.APIHistoryItem {
+    ) -> APIHistoryItem {
         let dateFormatter = ISO8601DateFormatter()
         dateFormatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
         
-        return SafeSnapAPIService.APIHistoryItem(
+        return APIHistoryItem(
             id: analysis.id,
             createdAt: dateFormatter.string(from: Date()),
             name: analysis.name,

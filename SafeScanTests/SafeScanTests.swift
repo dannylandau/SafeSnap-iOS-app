@@ -217,6 +217,11 @@ private final class MockAPIService: ProductAnalyzing {
         }
         return analysis
     }
+    
+    func saveToHistory(item: SafeSnap.APIHistoryItem) async throws -> SafeSnap.HistorySaveResponse {
+        let saveResponse = HistorySaveResponse(success: true, message: "Great success!")
+        return saveResponse
+    }
 }
 
 private final class InMemoryImageStore: ScanImageStoring {

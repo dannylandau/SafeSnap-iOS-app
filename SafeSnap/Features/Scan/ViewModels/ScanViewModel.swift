@@ -55,7 +55,7 @@ final class ScanViewModel: ObservableObject {
 
     init(
         coordinator: ScanAnalysisCoordinating,
-        durationTracker: ScanDurationTracking,
+        durationTracker: ScanDurationTracking = ScanDurationTracker(),
         durationFormatter: ScanDurationFormatting = ScanDurationFormatter(),
         featureFlags: FeatureFlagProviding = FeatureFlagService.shared
     ) {

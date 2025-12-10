@@ -71,6 +71,10 @@ protocol ProductAnalyzing {
         includeCats: Bool,
         includeChildren: Bool
     ) async throws -> ProductAnalysis
+    
+    func saveToHistory(
+        item: APIHistoryItem
+    ) async throws -> HistorySaveResponse
 }
 
 // MARK: - API Service
@@ -344,30 +348,6 @@ final class SafeSnapAPIService: ProductAnalyzing {
         let item: APIHistoryItem
     }
     
-    struct APIHistoryItem: Codable {
-        let id: String
-        let createdAt: String
-        let name: String
-        let score: Int
-        let maxScore: Int
-        let preview: String?
-        let imageUrl: String?
-        let labels: [String]
-        let category: String?
-        let petSafetyOptions: PetSafetyOptions?
-        let fullAnalysis: ProductAnalysis?
-    }
-    
-    struct HistorySaveResponse: Decodable {
-        let success: Bool
-        let message: String
-    }
-    
-    struct HistoryDeleteResponse: Decodable {
-        let success: Bool
-        let message: String
-    }
-    
     func getHistory() async throws -> [APIHistoryItem] {
         return try await makeRequest(
             endpoint: "/api/history",
@@ -409,3 +389,26 @@ final class SafeSnapAPIService: ProductAnalyzing {
     }
 }
 
+struct HistorySaveResponse: Decodable {
+    let success: Bool
+    let message: String
+}
+
+struct HistoryDeleteResponse: Decodable {
+    let success: Bool
+    let message: String
+}
+
+struct APIHistoryItem: Codable {
+    let id: String
+    let createdAt: String
+    let name: String
+    let score: Int
+    let maxScore: Int
+    let preview: String?
+    let imageUrl: String?
+    let labels: [String]
+    let category: String?
+    let petSafetyOptions: PetSafetyOptions?
+    let fullAnalysis: ProductAnalysis?
+}
