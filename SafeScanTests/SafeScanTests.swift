@@ -194,13 +194,13 @@ final class ArchieEndToEndTests: XCTestCase {
 
 // MARK: - Test Doubles
 
-private final class MockAPIService: SafeSnapAPIService {
+private final class MockAPIService: ProductAnalyzing {
     var analyzeCallCount = 0
     var stubAnalysis: ProductAnalysis?
     var shouldFail = false
     var failureError: Error = SafeSnapAPIError.networkError(underlying: URLError(.unknown))
     
-    override func analyze(
+    func analyze(
         image: UIImage,
         includeDogs: Bool,
         includeCats: Bool,
