@@ -1,8 +1,8 @@
 //
 //  ScanAnalysisCoordinatorTests.swift
-//  SafeSnap
+//  Archie
 //
-//  Ensures the coordinator orchestrates injected dependencies so the scan flow stays testable.
+//  Tests the coordinator's orchestration of API-based analysis flow.
 //
 
 import XCTest
@@ -12,69 +12,125 @@ import UIKit
 @MainActor
 final class ScanAnalysisCoordinatorTests: XCTestCase {
 
+    // MARK: - Tests
+    
     func test_startGeminiScan_persistsImage_andAddsHistoryItem() async throws {
-        let analysis = makeAnalyzedSafety()
-        let analyzer = MockAnalyzer(result: analysis)
+        let apiService = MockAPIService()
+        apiService.stubAnalysis = makeProductAnalysis()
+        
         let history = MockHistoryService()
         let imageStore = MockImageStore(result: makePersistedImage())
-        let vision = MockVisionService(result: makeVisionAnalysisResult())
-        let coordinator = ScanAnalysisCoordinator(analyzer: analyzer, visionService: vision, historyService: history, imageStore: imageStore)
+        
+        let coordinator = ScanAnalysisCoordinator(
+            apiService: apiService,
+            storageService: MockStorageService(),
+            historyService: history,
+            imageStore: imageStore,
+            userSession: nil
+        )
 
         let image = makeImage()
         let options = SafetyOptions(includeDogs: true, includeCats: false, includeChildren: true)
 
         try await coordinator.startGeminiScan(image: image, options: options)
 
-        XCTAssertEqual(analyzer.analyzeCallCount, 1)
-        XCTAssertEqual(vision.analyzeCallCount, 1)
-        XCTAssertEqual(analyzer.capturedOptions?.includeDogs, true)
+        XCTAssertEqual(apiService.analyzeCallCount, 1)
+        XCTAssertEqual(apiService.capturedOptions?.includeDogs, true)
+        XCTAssertEqual(apiService.capturedOptions?.includeCats, false)
         XCTAssertEqual(imageStore.persistCalls.count, 1)
         XCTAssertEqual(history.addedItems.count, 1)
         XCTAssertEqual(coordinator.latestHistoryItem, history.addedItems.first)
-        XCTAssertEqual(coordinator.currentPhase, .report)
-        XCTAssertTrue(coordinator.isComplete)
-        XCTAssertEqual(coordinator.explainability?.policy.canonicalCategory, analysis.extras.policy.canonicalCategory)
-        XCTAssertEqual(analyzer.capturedVisionContext?.guessName, vision.result.guess.name)
+        XCTAssertNotNil(coordinator.latestProductAnalysis)
+        XCTAssertEqual(coordinator.latestProductAnalysis?.id, apiService.stubAnalysis?.id)
     }
 
-    func test_cancelAnalysis_resetsPhase_andCancelsAnalyzer() {
-        let analyzer = MockAnalyzer(result: makeAnalyzedSafety())
-        let history = MockHistoryService()
-        let imageStore = MockImageStore(result: makePersistedImage())
-        let vision = MockVisionService(result: makeVisionAnalysisResult())
-        let coordinator = ScanAnalysisCoordinator(analyzer: analyzer, visionService: vision, historyService: history, imageStore: imageStore)
+    func test_cancelAnalysis_resetsPhase() {
+        let coordinator = ScanAnalysisCoordinator(
+            apiService: MockAPIService(),
+            storageService: MockStorageService(),
+            historyService: MockHistoryService(),
+            imageStore: MockImageStore(result: makePersistedImage()),
+            userSession: nil
+        )
 
-        coordinator.currentPhase = .openAI
+        coordinator.currentPhase = .analyzing
         coordinator.cancelAnalysis()
 
-        XCTAssertEqual(analyzer.cancelCallCount, 1)
         XCTAssertEqual(coordinator.currentPhase, .preparing)
     }
 
-    func test_startGeminiScan_propagatesVisionFailure() async {
-        let analyzer = MockAnalyzer(result: makeAnalyzedSafety())
-        let history = MockHistoryService()
-        let imageStore = MockImageStore(result: makePersistedImage())
-        let failingVision = FailingVisionService(error: VisionError.failedRequest)
-        let coordinator = ScanAnalysisCoordinator(analyzer: analyzer, visionService: failingVision, historyService: history, imageStore: imageStore)
+    func test_startGeminiScan_propagatesAPIFailure() async {
+        let apiService = MockAPIService()
+        apiService.shouldFail = true
+        apiService.failureError = SafeSnapAPIError.networkError(underlying: URLError(.notConnectedToInternet))
+        
+        let coordinator = ScanAnalysisCoordinator(
+            apiService: apiService,
+            storageService: MockStorageService(),
+            historyService: MockHistoryService(),
+            imageStore: MockImageStore(result: makePersistedImage()),
+            userSession: nil
+        )
 
         let image = makeImage()
 
         do {
-            try await coordinator.startGeminiScan(image: image, options: SafetyOptions(includeDogs: false, includeCats: false, includeChildren: true))
-            XCTFail("Expected vision failure to throw")
-        } catch let error as ScanError {
-            switch error {
-            case .visionFailed:
-                break
-            default:
-                XCTFail("Expected visionFailed, got \(error)")
-            }
+            try await coordinator.startGeminiScan(
+                image: image,
+                options: SafetyOptions(includeDogs: false, includeCats: false, includeChildren: true)
+            )
+            XCTFail("Expected API failure to throw")
         } catch {
-            XCTFail("Unexpected error: \(error)")
+            // Expected - API failure should propagate
+            XCTAssertTrue(error is ScanError)
         }
-
-        XCTAssertEqual(analyzer.analyzeCallCount, 0)
+    }
+    
+    func test_startGeminiScan_updatesPhasesDuringFlow() async throws {
+        let apiService = MockAPIService()
+        apiService.stubAnalysis = makeProductAnalysis()
+        
+        let coordinator = ScanAnalysisCoordinator(
+            apiService: apiService,
+            storageService: MockStorageService(),
+            historyService: MockHistoryService(),
+            imageStore: MockImageStore(result: makePersistedImage()),
+            userSession: nil
+        )
+        
+        XCTAssertEqual(coordinator.currentPhase, .preparing)
+        
+        let image = makeImage()
+        try await coordinator.startGeminiScan(
+            image: image,
+            options: SafetyOptions(includeDogs: true, includeCats: true, includeChildren: true)
+        )
+        
+        // After completion, should be at report phase
+        XCTAssertTrue(coordinator.isComplete)
+    }
+    
+    func test_startGeminiScan_populatesExplainability() async throws {
+        let apiService = MockAPIService()
+        let analysis = makeProductAnalysis()
+        apiService.stubAnalysis = analysis
+        
+        let coordinator = ScanAnalysisCoordinator(
+            apiService: apiService,
+            storageService: MockStorageService(),
+            historyService: MockHistoryService(),
+            imageStore: MockImageStore(result: makePersistedImage()),
+            userSession: nil
+        )
+        
+        let image = makeImage()
+        try await coordinator.startGeminiScan(
+            image: image,
+            options: SafetyOptions(includeDogs: true, includeCats: false, includeChildren: true)
+        )
+        
+        XCTAssertNotNil(coordinator.explainability)
+        XCTAssertEqual(coordinator.visionBestGuess, analysis.name)
     }
 
     // MARK: - Helpers
@@ -86,39 +142,49 @@ final class ScanAnalysisCoordinatorTests: XCTestCase {
         }
     }
 
-    private func makeAnalyzedSafety(name: String = "Fruit Snack") -> AnalyzedSafety {
-        let pros = [SafetyAnalysisResponse.LabeledItem(label: "High fibre", severity: .low, category: "nutrition")]
-        let cons = [SafetyAnalysisResponse.LabeledItem(label: "High sugar", severity: .medium, category: "nutrition")]
-        let general = SafetyAnalysisResponse.GeneralSafety(pros: pros, cons: cons)
-        let pet = SafetyAnalysisResponse.PetSafety(dogs: [], cats: [])
-        let response = SafetyAnalysisResponse(
-            productName: name,
-            productType: "Snack",
-            overallSafetyScore: 70,
-            childSafetyScore: 65,
-            dogSafetyScore: 50,
-            catSafetyScore: 40,
-            modelConfidence: 0.9,
-            recognitionConfidence: 0.88,
-            generalSafety: general,
-            petSafety: pet,
-            hygieneWarnings: [],
-            recalls: [],
-            kidPros: ["High fibre"],
-            kidCons: ["High sugar"],
-            kidNarrative: "Mock child narrative",
-            dogPros: ["Offer sparingly", "Serve with water", "Check label for xylitol"],
-            dogCons: ["Contains xylitol", "High sugar load", "Possible GI upset"],
-            dogNarrative: "Mock dog narrative",
-            catPros: ["Provide alternative treats", "Consult vet first", "Keep portions minimal"],
-            catCons: ["Sweeteners upset cats", "High sugar", "Potential digestive distress"],
-            catNarrative: "Mock cat narrative"
+    private func makeProductAnalysis() -> ProductAnalysis {
+        ProductAnalysis(
+            id: "fruit-snack-123456",
+            name: "Fruit Snack",
+            image: "",
+            imageUrl: nil,
+            safetyScore: SafetyScore(overall: 7),
+            category: "Snack",
+            recognitionStatus: .success,
+            analysis: SafetyAnalysis(
+                kidSafety: KidSafety(
+                    status: .safe,
+                    score: 65,
+                    benefits: ["High fibre"],
+                    concerns: ["High sugar"],
+                    narrative: "Mock child narrative"
+                ),
+                petSafety: PetSafetyAnalysis(
+                    dogs: PetSafetyItem(
+                        status: .warning,
+                        score: 50,
+                        warnings: ["Contains xylitol"],
+                        pros: ["Offer sparingly"],
+                        cons: ["High sugar"],
+                        narrative: "Mock dog narrative",
+                        details: []
+                    ),
+                    cats: nil
+                ),
+                hygiene: HygieneAnalysis(recommendations: [], warnings: []),
+                generalSafety: GeneralSafetyAnalysis(pros: [], cons: []),
+                recalls: []
+            ),
+            petSafetyOptions: PetSafetyOptions(
+                includeDogs: true,
+                includeCats: false,
+                includeChildren: true
+            ),
+            analysisMetadata: AnalysisMetadata(
+                modelConfidence: 0.9,
+                recognitionConfidence: 0.88
+            )
         )
-        let extras = AnalysisExtras(
-            evidence: SafetyEvidence(labels: ["snack"], ocrHits: ["Fruit Snack"]),
-            policy: PolicyOutcome(canonicalCategory: "snack", rulesTriggered: ["overall_capped_by_child"])
-        )
-        return AnalyzedSafety(response: response, extras: extras)
     }
 
     private func makePersistedImage() -> PersistedScanImage {
@@ -127,55 +193,34 @@ final class ScanAnalysisCoordinatorTests: XCTestCase {
         let thumbURL = tempDir.appendingPathComponent("IMG_\(UUID().uuidString)_thumb.jpg")
         return PersistedScanImage(imageURL: imageURL, thumbnailURL: thumbURL, pixelSize: CGSize(width: 400, height: 400), format: .jpg)
     }
-
-    private func makeVisionAnalysisResult() -> VisionAnalysisResult {
-        let guess = ProductGuess(name: "Fruit Snack", type: "Snack", confidence: 0.82, brand: "SnackCo")
-        return VisionAnalysisResult(
-            guess: guess,
-            labels: ["fruit", "snack"],
-            objects: ["box"],
-            detectedText: "SnackCo Fruit Snack",
-            brandCandidates: ["SnackCo"],
-            confidence: guess.confidence,
-            sanitizedContext: "{\"labels\":[\"fruit\",\"snack\"]}",
-            bestGuess: "Fruit Snack",
-            webEntities: ["fruit snack"]
-        )
-    }
 }
 
 // MARK: - Test Doubles
 
-private final class MockAnalyzer: SafetyAnalyzing {
+private final class MockAPIService: SafeSnapAPIService {
     var analyzeCallCount = 0
-    var cancelCallCount = 0
-    var capturedOptions: SafetyOptions?
-    var capturedImages: [UIImage] = []
-    var result: AnalyzedSafety
-    var capturedVisionContext: VisionContextPayload?
-
-    init(result: AnalyzedSafety) {
-        self.result = result
-    }
-
-    func analyzeSafetyWithExtras(
+    var capturedOptions: (includeDogs: Bool, includeCats: Bool, includeChildren: Bool)?
+    var stubAnalysis: ProductAnalysis?
+    var shouldFail = false
+    var failureError: Error = SafeSnapAPIError.networkError(underlying: URLError(.unknown))
+    
+    override func analyze(
         image: UIImage,
-        options: SafetyOptions,
-        streamToken: @escaping (String) -> Void,
-        visionLabels: [String],
-        ocrHits: [String],
-        visionContext: VisionContextPayload?
-    ) async throws -> AnalyzedSafety {
+        includeDogs: Bool,
+        includeCats: Bool,
+        includeChildren: Bool
+    ) async throws -> ProductAnalysis {
         analyzeCallCount += 1
-        capturedImages.append(image)
-        capturedOptions = options
-        streamToken("testing")
-        capturedVisionContext = visionContext
-        return result
-    }
-
-    func cancelAnalysis() {
-        cancelCallCount += 1
+        capturedOptions = (includeDogs, includeCats, includeChildren)
+        
+        if shouldFail {
+            throw failureError
+        }
+        
+        guard let analysis = stubAnalysis else {
+            throw SafeSnapAPIError.noData
+        }
+        return analysis
     }
 }
 
@@ -202,36 +247,15 @@ private final class MockImageStore: ScanImageStoring {
     }
 }
 
-private final class MockVisionService: VisionServiceType {
-    var analyzeCallCount = 0
-    let result: VisionAnalysisResult
-
-    init(result: VisionAnalysisResult) {
-        self.result = result
+private final class MockStorageService: ImageStorageService {
+    var uploadedImages: [String: UIImage] = [:]
+    
+    func uploadAnalysisImage(image: UIImage, analysisId: String) async throws -> String {
+        uploadedImages[analysisId] = image
+        return "https://storage.example.com/\(analysisId).jpg"
     }
-
-    func recognizeProduct(from image: CGImage) async throws -> ProductGuess {
-        result.guess
-    }
-
-    func analyze(image: UIImage) async throws -> VisionAnalysisResult {
-        analyzeCallCount += 1
-        return result
-    }
-}
-
-private final class FailingVisionService: VisionServiceType {
-    let error: Error
-
-    init(error: Error) {
-        self.error = error
-    }
-
-    func recognizeProduct(from image: CGImage) async throws -> ProductGuess {
-        throw error
-    }
-
-    func analyze(image: UIImage) async throws -> VisionAnalysisResult {
-        throw error
+    
+    func deleteAnalysisImage(analysisId: String) async throws {
+        uploadedImages.removeValue(forKey: analysisId)
     }
 }

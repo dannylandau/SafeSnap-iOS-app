@@ -1,8 +1,8 @@
 //
 //  SafeScanTests.swift
-//  SafeScanTests
+//  Archie
 //
-//  Created by Marcin Grześkowiak on 26/06/2025.
+//  End-to-end integration tests for the scan flow.
 //
 
 import XCTest
@@ -11,14 +11,21 @@ import SwiftUI
 import UIKit
 
 @MainActor
-final class SafeSnapEndToEndTests: XCTestCase {
+final class ArchieEndToEndTests: XCTestCase {
 
     func test_fullScanFlow_addsResultToHistory() async throws {
         let historyService = makeHistoryService()
-        let analyzer = MockAnalyzer(result: makeAnalyzedSafety())
+        let apiService = MockAPIService()
+        apiService.stubAnalysis = makeProductAnalysis()
+        
         let imageStore = InMemoryImageStore()
-        let vision = MockVisionService(result: makeVisionAnalysisResult())
-        let coordinator = ScanAnalysisCoordinator(analyzer: analyzer, visionService: vision, historyService: historyService, imageStore: imageStore)
+        let coordinator = ScanAnalysisCoordinator(
+            apiService: apiService,
+            storageService: MockStorageService(),
+            historyService: historyService,
+            imageStore: imageStore,
+            userSession: nil
+        )
         let viewModel = ScanViewModel(coordinator: coordinator)
 
         let (image, data) = makeImage()
@@ -27,7 +34,7 @@ final class SafeSnapEndToEndTests: XCTestCase {
         try await waitForHistoryCount(on: historyService, expected: 1)
 
         XCTAssertEqual(historyService.records.count, 1)
-        XCTAssertEqual(historyService.records.first?.analysis.productName, analyzer.result.response.productName)
+        XCTAssertEqual(historyService.records.first?.analysis.productName, apiService.stubAnalysis?.name)
         if case .result = viewModel.phase {
             XCTAssertNotNil(viewModel.resultVM)
         } else {
@@ -37,10 +44,17 @@ final class SafeSnapEndToEndTests: XCTestCase {
 
     func test_scanAppearsInAccountStats() async throws {
         let historyService = makeHistoryService()
-        let analyzer = MockAnalyzer(result: makeAnalyzedSafety())
+        let apiService = MockAPIService()
+        apiService.stubAnalysis = makeProductAnalysis()
+        
         let imageStore = InMemoryImageStore()
-        let vision = MockVisionService(result: makeVisionAnalysisResult())
-        let coordinator = ScanAnalysisCoordinator(analyzer: analyzer, visionService: vision, historyService: historyService, imageStore: imageStore)
+        let coordinator = ScanAnalysisCoordinator(
+            apiService: apiService,
+            storageService: MockStorageService(),
+            historyService: historyService,
+            imageStore: imageStore,
+            userSession: nil
+        )
         let viewModel = ScanViewModel(coordinator: coordinator)
         let accountVM = AccountViewModel(userSession: MockUserSession(), historyService: historyService)
 
@@ -55,6 +69,37 @@ final class SafeSnapEndToEndTests: XCTestCase {
 
         XCTAssertTrue(accountVM.stats.contains(where: { $0.label == "Scans" && $0.value == "1" }))
     }
+    
+    func test_scanWithAPIError_setsErrorPhase() async throws {
+        let historyService = makeHistoryService()
+        let apiService = MockAPIService()
+        apiService.shouldFail = true
+        apiService.failureError = SafeSnapAPIError.networkError(underlying: URLError(.notConnectedToInternet))
+        
+        let imageStore = InMemoryImageStore()
+        let coordinator = ScanAnalysisCoordinator(
+            apiService: apiService,
+            storageService: MockStorageService(),
+            historyService: historyService,
+            imageStore: imageStore,
+            userSession: nil
+        )
+        let viewModel = ScanViewModel(coordinator: coordinator)
+
+        let (image, data) = makeImage()
+        viewModel.beginScan(with: data, uiImage: image, includeDog: true, includeCat: false, includeChildren: true)
+
+        try await waitUntil(timeout: 1.0) {
+            if case .error = viewModel.phase { return true }
+            return false
+        }
+
+        if case .error = viewModel.phase {
+            XCTAssertNotNil(viewModel.scanError)
+        } else {
+            XCTFail("Expected error phase after API failure")
+        }
+    }
 
     // MARK: - Helpers
 
@@ -63,56 +108,58 @@ final class SafeSnapEndToEndTests: XCTestCase {
         return ScanHistoryService(fileURL: fileURL)
     }
 
-    private func makeAnalyzedSafety(name: String = "Fruit Snack") -> AnalyzedSafety {
-        let pros = [SafetyAnalysisResponse.LabeledItem(label: "High fibre", severity: .low, category: "nutrition")]
-        let cons = [SafetyAnalysisResponse.LabeledItem(label: "High sugar", severity: .medium, category: "nutrition")]
-        let general = SafetyAnalysisResponse.GeneralSafety(pros: pros, cons: cons)
-        let pet = SafetyAnalysisResponse.PetSafety(
-            dogs: [SafetyAnalysisResponse.PetWarning(severity: .medium, warning: "Limit treats", reason: "Contains xylitol")],
-            cats: []
-        )
-        let response = SafetyAnalysisResponse(
-            productName: name,
-            productType: "Snack",
-            overallSafetyScore: 70,
-            childSafetyScore: 65,
-            dogSafetyScore: 40,
-            catSafetyScore: 80,
-            modelConfidence: 0.9,
-            recognitionConfidence: 0.88,
-            generalSafety: general,
-            petSafety: pet,
-            hygieneWarnings: [],
-            recalls: [],
-            kidPros: ["High fibre"],
-            kidCons: ["Contains xylitol"],
-            kidNarrative: "Mock narrative for child safety.",
-            dogPros: ["Offer only in tiny bites", "Provide water afterwards", "Monitor for GI upset"],
-            dogCons: ["Contains xylitol which is toxic", "High sugar stresses pancreas", "May trigger hypoglycemia"],
-            dogNarrative: "Mock narrative for dog safety.",
-            catPros: ["No direct cat benefit", "Only use under vet guidance", "Provide alternative treats"],
-            catCons: ["Artificial sweeteners irritate cats", "High sugar can upset stomach", "Potential for vomiting"],
-            catNarrative: "Mock narrative for cat safety."
-        )
-        let extras = AnalysisExtras(
-            evidence: SafetyEvidence(labels: ["snack"], ocrHits: ["Fruit Snack"]),
-            policy: PolicyOutcome(canonicalCategory: "snack", rulesTriggered: ["overall_capped_by_child"])
-        )
-        return AnalyzedSafety(response: response, extras: extras)
-    }
-
-    private func makeVisionAnalysisResult() -> VisionAnalysisResult {
-        let guess = ProductGuess(name: "Fruit Snack", type: "Snack", confidence: 0.82, brand: "SnackCo")
-        return VisionAnalysisResult(
-            guess: guess,
-            labels: ["fruit", "snack"],
-            objects: ["box"],
-            detectedText: "SnackCo Fruit Snack",
-            brandCandidates: ["SnackCo"],
-            confidence: guess.confidence,
-            sanitizedContext: "{\"labels\":[\"fruit\"],\"ocr\":[\"Fruit Snack\"]}",
-            bestGuess: "Fruit Snack",
-            webEntities: ["fruit snack"]
+    private func makeProductAnalysis() -> ProductAnalysis {
+        ProductAnalysis(
+            id: "fruit-snack-123456",
+            name: "Fruit Snack",
+            image: "",
+            imageUrl: nil,
+            safetyScore: SafetyScore(overall: 7),
+            category: "Snack",
+            recognitionStatus: .success,
+            analysis: SafetyAnalysis(
+                kidSafety: KidSafety(
+                    status: .safe,
+                    score: 65,
+                    benefits: ["High fibre"],
+                    concerns: ["High sugar"],
+                    narrative: "Mock child narrative"
+                ),
+                petSafety: PetSafetyAnalysis(
+                    dogs: PetSafetyItem(
+                        status: .warning,
+                        score: 40,
+                        warnings: ["Contains xylitol"],
+                        pros: ["Offer sparingly", "Provide water", "Monitor for symptoms"],
+                        cons: ["Contains xylitol", "High sugar", "May cause hypoglycemia"],
+                        narrative: "Mock dog narrative",
+                        details: [
+                            PetSafetyDetail(severity: .medium, warning: "Limit treats", reason: "Contains xylitol")
+                        ]
+                    ),
+                    cats: PetSafetyItem(
+                        status: .safe,
+                        score: 80,
+                        warnings: [],
+                        pros: ["No direct cat benefit", "Only under vet guidance", "Provide alternatives"],
+                        cons: ["Artificial sweeteners", "High sugar", "Potential vomiting"],
+                        narrative: "Mock cat narrative",
+                        details: []
+                    )
+                ),
+                hygiene: HygieneAnalysis(recommendations: [], warnings: []),
+                generalSafety: GeneralSafetyAnalysis(pros: [], cons: []),
+                recalls: []
+            ),
+            petSafetyOptions: PetSafetyOptions(
+                includeDogs: true,
+                includeCats: true,
+                includeChildren: true
+            ),
+            analysisMetadata: AnalysisMetadata(
+                modelConfidence: 0.9,
+                recognitionConfidence: 0.88
+            )
         )
     }
 
@@ -147,30 +194,28 @@ final class SafeSnapEndToEndTests: XCTestCase {
 
 // MARK: - Test Doubles
 
-private final class MockAnalyzer: SafetyAnalyzing {
+private final class MockAPIService: SafeSnapAPIService {
     var analyzeCallCount = 0
-    var cancelCallCount = 0
-    let result: AnalyzedSafety
-
-    init(result: AnalyzedSafety) {
-        self.result = result
-    }
-
-    func analyzeSafetyWithExtras(
+    var stubAnalysis: ProductAnalysis?
+    var shouldFail = false
+    var failureError: Error = SafeSnapAPIError.networkError(underlying: URLError(.unknown))
+    
+    override func analyze(
         image: UIImage,
-        options: SafetyOptions,
-        streamToken: @escaping (String) -> Void,
-        visionLabels: [String],
-        ocrHits: [String],
-        visionContext: VisionContextPayload?
-    ) async throws -> AnalyzedSafety {
+        includeDogs: Bool,
+        includeCats: Bool,
+        includeChildren: Bool
+    ) async throws -> ProductAnalysis {
         analyzeCallCount += 1
-        streamToken("testing")
-        return result
-    }
-
-    func cancelAnalysis() {
-        cancelCallCount += 1
+        
+        if shouldFail {
+            throw failureError
+        }
+        
+        guard let analysis = stubAnalysis else {
+            throw SafeSnapAPIError.noData
+        }
+        return analysis
     }
 }
 
@@ -187,18 +232,10 @@ private final class InMemoryImageStore: ScanImageStoring {
     }
 }
 
-private final class MockVisionService: VisionServiceType {
-    let result: VisionAnalysisResult
-
-    init(result: VisionAnalysisResult) {
-        self.result = result
+private final class MockStorageService: ImageStorageService {
+    func uploadAnalysisImage(image: UIImage, analysisId: String) async throws -> String {
+        "https://storage.example.com/\(analysisId).jpg"
     }
-
-    func recognizeProduct(from image: CGImage) async throws -> ProductGuess {
-        result.guess
-    }
-
-    func analyze(image: UIImage) async throws -> VisionAnalysisResult {
-        result
-    }
+    
+    func deleteAnalysisImage(analysisId: String) async throws {}
 }

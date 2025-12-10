@@ -1,8 +1,8 @@
 //
 //  ScanViewModelTests.swift
-//  SafeSnap
+//  Archie
 //
-//  Updated to exercise the Gemini-based scan pipeline and retry behaviour.
+//  Tests the ScanViewModel's orchestration of scan flow and retry behaviour.
 //
 
 import XCTest
@@ -66,9 +66,30 @@ final class ScanViewModelTests: XCTestCase {
             visionBestGuess: nil,
             visionWebEntities: [],
             analysis: analysis,
-            model: "gemini-2.5-flash-lite",
+            model: "archie-backend",
             promptVersion: "v1",
             appVersion: "1.0"
+        )
+    }
+    
+    private func makeProductAnalysis() -> ProductAnalysis {
+        ProductAnalysis(
+            id: "fruit-snack-123",
+            name: "Fruit Snack",
+            image: "",
+            imageUrl: nil,
+            safetyScore: SafetyScore(overall: 7),
+            category: "Snack",
+            recognitionStatus: .success,
+            analysis: SafetyAnalysis(
+                kidSafety: KidSafety(status: .safe, score: 70, benefits: [], concerns: [], narrative: nil),
+                petSafety: PetSafetyAnalysis(dogs: nil, cats: nil),
+                hygiene: HygieneAnalysis(recommendations: [], warnings: []),
+                generalSafety: GeneralSafetyAnalysis(pros: [], cons: []),
+                recalls: []
+            ),
+            petSafetyOptions: PetSafetyOptions(includeDogs: true, includeCats: false, includeChildren: true),
+            analysisMetadata: nil
         )
     }
 
@@ -94,6 +115,7 @@ final class ScanViewModelTests: XCTestCase {
     func test_beginScan_populatesResult_andRecordsToggles() async {
         let coordinator = MockCoordinator()
         coordinator.stubHistoryItem = makeHistoryItem(includeDogs: true, includeCats: false, includeChildren: true)
+        coordinator.stubProductAnalysis = makeProductAnalysis()
         let viewModel = ScanViewModel(coordinator: coordinator)
 
         let image = makeImage()
@@ -121,6 +143,7 @@ final class ScanViewModelTests: XCTestCase {
     func test_beginScan_forwardsChildToggleToCoordinator() async {
         let coordinator = MockCoordinator()
         coordinator.stubHistoryItem = makeHistoryItem(includeDogs: false, includeCats: false, includeChildren: true)
+        coordinator.stubProductAnalysis = makeProductAnalysis()
         let viewModel = ScanViewModel(coordinator: coordinator)
         let image = makeImage()
         let data = image.jpegData(compressionQuality: 0.7)!
@@ -136,6 +159,7 @@ final class ScanViewModelTests: XCTestCase {
     func test_beginScan_recordsDurationWhenFlagEnabled() async {
         let coordinator = MockCoordinator()
         coordinator.stubHistoryItem = makeHistoryItem(includeDogs: false, includeCats: false, includeChildren: true)
+        coordinator.stubProductAnalysis = makeProductAnalysis()
 
         let tracker = MockScanDurationTracker()
         tracker.stubbedStopDuration = .nanoseconds(1_500_000_000) // 1.5s
@@ -167,6 +191,7 @@ final class ScanViewModelTests: XCTestCase {
     func test_beginScan_skipsDurationWhenFlagDisabled() async {
         let coordinator = MockCoordinator()
         coordinator.stubHistoryItem = makeHistoryItem(includeDogs: true, includeCats: false, includeChildren: true)
+        coordinator.stubProductAnalysis = makeProductAnalysis()
 
         let tracker = MockScanDurationTracker()
         tracker.stubbedStopDuration = .nanoseconds(900_000_000)
@@ -223,6 +248,7 @@ final class ScanViewModelTests: XCTestCase {
     func test_retryLastScan_reusesPreviousToggleState() async {
         let coordinator = MockCoordinator()
         coordinator.stubHistoryItem = makeHistoryItem(includeDogs: false, includeCats: true, includeChildren: true)
+        coordinator.stubProductAnalysis = makeProductAnalysis()
         let viewModel = ScanViewModel(coordinator: coordinator)
         let image = makeImage()
         guard let data = image.jpegData(compressionQuality: 0.7) else {
@@ -249,6 +275,7 @@ final class ScanViewModelTests: XCTestCase {
     func test_cancelScan_clearsState() async {
         let coordinator = MockCoordinator()
         coordinator.stubHistoryItem = makeHistoryItem(includeDogs: false, includeCats: false, includeChildren: true)
+        coordinator.stubProductAnalysis = makeProductAnalysis()
         let viewModel = ScanViewModel(coordinator: coordinator)
         let image = makeImage()
         let data = image.jpegData(compressionQuality: 0.8)!
@@ -325,11 +352,14 @@ private final class MockCoordinator: ScanAnalysisCoordinating {
     var startCalls: [SafetyOptions] = []
     var cancelCallCount = 0
     var stubHistoryItem: ScanHistoryItem?
+    var stubProductAnalysis: ProductAnalysis?
     var latestHistoryItem: ScanHistoryItem?
-    var stage: SafetyAnalyzer.Stage = .fast {
-        didSet { stageSubject.send(stage) }
-    }
-    private let stageSubject = CurrentValueSubject<SafetyAnalyzer.Stage, Never>(.fast)
+    var latestProductAnalysis: ProductAnalysis?
+    var stage: AnalysisStage = .fast
+    var fastDuration: TimeInterval? = nil
+    var smartDuration: TimeInterval? = nil
+    
+    private let stageSubject = CurrentValueSubject<AnalysisStage, Never>(.fast)
     private let partialSubject = CurrentValueSubject<String?, Never>(nil)
     private let bestGuessSubject = CurrentValueSubject<String?, Never>(nil)
     private let webEntitiesSubject = CurrentValueSubject<[String], Never>([])
@@ -337,13 +367,14 @@ private final class MockCoordinator: ScanAnalysisCoordinating {
     func startGeminiScan(image: UIImage, options: SafetyOptions) async throws {
         startCalls.append(options)
         latestHistoryItem = stubHistoryItem
+        latestProductAnalysis = stubProductAnalysis
     }
 
     func cancelAnalysis() {
         cancelCallCount += 1
     }
 
-    var stagePublisher: AnyPublisher<SafetyAnalyzer.Stage, Never> { stageSubject.eraseToAnyPublisher() }
+    var stagePublisher: AnyPublisher<AnalysisStage, Never> { stageSubject.eraseToAnyPublisher() }
     var partialPublisher: AnyPublisher<String?, Never> { partialSubject.eraseToAnyPublisher() }
     var visionBestGuessPublisher: AnyPublisher<String?, Never> { bestGuessSubject.eraseToAnyPublisher() }
     var visionWebEntitiesPublisher: AnyPublisher<[String], Never> { webEntitiesSubject.eraseToAnyPublisher() }
