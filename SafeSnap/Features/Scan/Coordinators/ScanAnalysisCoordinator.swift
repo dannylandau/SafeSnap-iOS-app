@@ -179,7 +179,7 @@ final class ScanAnalysisCoordinator: ObservableObject {
 
     // MARK: - Dependencies
     
-    private let apiService: SafeSnapAPIService
+    private let apiService: ProductAnalyzing
     private let storageService: ImageStorageService
     private let historyService: ScanHistoryRecording
     private let imageStore: ScanImageStoring
@@ -208,7 +208,7 @@ final class ScanAnalysisCoordinator: ObservableObject {
     // MARK: - Init
 
     init(
-        apiService: SafeSnapAPIService = .shared,
+        apiService: ProductAnalyzing = SafeSnapAPIService.shared,
         storageService: ImageStorageService = FirebaseStorageService.shared,
         historyService: ScanHistoryRecording,
         imageStore: ScanImageStoring = FileScanImageStore(),

@@ -61,9 +61,21 @@ enum SafeSnapAPIError: LocalizedError {
     }
 }
 
+// MARK: - API Protocol
+
+/// Protocol for product analysis API - enables testing with mocks
+protocol ProductAnalyzing {
+    func analyze(
+        image: UIImage,
+        includeDogs: Bool,
+        includeCats: Bool,
+        includeChildren: Bool
+    ) async throws -> ProductAnalysis
+}
+
 // MARK: - API Service
 
-final class SafeSnapAPIService {
+final class SafeSnapAPIService: ProductAnalyzing {
     
     // MARK: - Properties
     
