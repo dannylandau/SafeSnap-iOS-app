@@ -110,7 +110,7 @@ class ScanHistoryService: ObservableObject {
     }
     
     /// Merge remote history items with local records
-    private func mergeRemoteHistory(_ remoteItems: [SafeSnapAPIService.APIHistoryItem]) async {
+    private func mergeRemoteHistory(_ remoteItems: [APIHistoryItem]) async {
         // Create a set of existing local IDs
         let localIds = Set(records.map { $0.id.uuidString })
         
@@ -129,7 +129,7 @@ class ScanHistoryService: ObservableObject {
     }
     
     /// Convert API history item to local ScanHistoryItem
-    private func convertToLocalItem(_ apiItem: SafeSnapAPIService.APIHistoryItem) -> ScanHistoryItem? {
+    private func convertToLocalItem(_ apiItem: APIHistoryItem) -> ScanHistoryItem? {
         guard let fullAnalysis = apiItem.fullAnalysis else { return nil }
         
         // Convert fullAnalysis to SafetyAnalysisResponse

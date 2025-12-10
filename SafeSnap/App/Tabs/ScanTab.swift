@@ -22,7 +22,7 @@ struct ScanTab: View {
             historyService: dependencies.historyService
         )
         _viewModel = StateObject(
-            wrappedValue: ScanViewModel(coordinator: coordinator, durationTracker: ScanDurationTracker())
+            wrappedValue: ScanViewModel(coordinator: coordinator)
         )
     }
 
