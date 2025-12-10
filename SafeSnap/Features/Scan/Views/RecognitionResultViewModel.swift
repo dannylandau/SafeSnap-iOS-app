@@ -1,6 +1,6 @@
 //
 //  RecognitionResultViewModel.swift
-//  SafeSnap
+//  Archie
 //
 //  Re-implemented to support focused score selection, persistence,
 //  and a consistent 0–100 → 0–10 scoring model for the UI.
@@ -32,6 +32,9 @@ final class RecognitionResultViewModel: ObservableObject, Identifiable {
     let scanDurationDescription: String?
     let visionBestGuess: String?
     let visionWebEntities: [String]
+    
+    // Backend-returned analysis with human-readable ID for sharing
+    let productAnalysis: ProductAnalysis?
     
     // Persisted image (filename-only for durability across reinstalls)
     let imageFilename: String?
@@ -179,7 +182,8 @@ final class RecognitionResultViewModel: ObservableObject, Identifiable {
         evidence: SafetyEvidence = .init(labels: [], ocrHits: []),
         dto: GeminiSafetyDTO? = nil,
         visionBestGuess: String? = nil,
-        visionWebEntities: [String] = []
+        visionWebEntities: [String] = [],
+        productAnalysis: ProductAnalysis? = nil
     ) {
         self.image = image
         self.productName = productName
@@ -196,6 +200,7 @@ final class RecognitionResultViewModel: ObservableObject, Identifiable {
         self.dto = dto
         self.visionBestGuess = visionBestGuess?.trimmingCharacters(in: .whitespacesAndNewlines)
         self.visionWebEntities = visionWebEntities.map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }.filter { !$0.isEmpty }
+        self.productAnalysis = productAnalysis
         // Surface confidences from DTO when present
         self.childConfidence = dto?.childConfidence
         self.dogConfidence = dto?.dogConfidence
@@ -228,7 +233,12 @@ extension RecognitionResultViewModel {
 
 // MARK: — Convenience initializers & helpers
 extension RecognitionResultViewModel {
-    convenience init(image: UIImage?, from item: ScanHistoryItem, scanDurationDescription: String? = nil) {
+    convenience init(
+        image: UIImage?,
+        from item: ScanHistoryItem,
+        scanDurationDescription: String? = nil,
+        productAnalysis: ProductAnalysis? = nil
+    ) {
         self.init(
             image: image,
             productName: item.productName,
@@ -240,7 +250,8 @@ extension RecognitionResultViewModel {
             imageFilename: item.imageFilename,
             scanDurationDescription: scanDurationDescription,
             visionBestGuess: item.visionBestGuess,
-            visionWebEntities: item.visionWebEntities
+            visionWebEntities: item.visionWebEntities,
+            productAnalysis: productAnalysis
         )
     }
 

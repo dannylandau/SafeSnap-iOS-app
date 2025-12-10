@@ -1,6 +1,6 @@
 //
 //  ResultView.swift
-//  SafeSnap
+//  Archie
 //
 
 import SwiftUI
@@ -85,9 +85,11 @@ struct ResultView: View {
             imageCard()
             headerBar()
 //            scoresRow()
+            #if DEBUG
             if let duration = vm.scanDurationDescription {
                 scanDurationRow(duration: duration)
             }
+            #endif
             if vm.includeChildren {
                 kidSafetySection()
                     .id("childrenSection")
@@ -232,9 +234,9 @@ struct ResultView: View {
     private func selectedScore10() -> Int {
         let a = vm.analysis
         switch vm.selectedSection {
-        case .children: return score10(fromHundred: a.childSafetyScore)
-        case .dogs:     return score10(fromHundred: a.dogSafetyScore ?? 0)
-        case .cats:     return score10(fromHundred: a.catSafetyScore ?? 0)
+        case .children: return a.childSafetyScore
+        case .dogs:     return a.dogSafetyScore ?? 0
+        case .cats:     return a.catSafetyScore ?? 0
         }
     }
     private var selectedColor: Color { scoreColor(selectedScore10()) }
@@ -268,9 +270,9 @@ struct ResultView: View {
     // MARK: — Scores Row (Kids / Dogs / Cats)
     private func scoresRow() -> some View {
         let a = vm.analysis
-        let child10 = score10(fromHundred: a.childSafetyScore)
-        let dog10: Int? = a.dogSafetyScore.map { score10(fromHundred: $0) }
-        let cat10: Int? = a.catSafetyScore.map { score10(fromHundred: $0) }
+        let child10 = a.childSafetyScore
+        let dog10: Int? = a.dogSafetyScore
+        let cat10: Int? = a.catSafetyScore
 
         let showDog = vm.includeDogs
         let showCat = vm.includeCats
@@ -321,7 +323,7 @@ struct ResultView: View {
 
     // MARK: — Kid Safety
     private func kidSafetySection() -> some View {
-        let child10 = score10(fromHundred: vm.analysis.childSafetyScore)
+        let child10 = vm.analysis.childSafetyScore
         let narrative = vm.kidNarrative
         return SafetySectionView(
             title: "Kid Safety",
@@ -337,7 +339,7 @@ struct ResultView: View {
 
     private func dogSafetySection() -> some View {
         let score = vm.analysis.dogSafetyScore ?? 0
-        let dog10 = score10(fromHundred: score)
+        let dog10 = score
         let pros = vm.dogBenefits
         let risks = vm.dogConcerns
         let narrative = vm.dogNarrative
@@ -355,7 +357,7 @@ struct ResultView: View {
 
     private func catSafetySection() -> some View {
         let score = vm.analysis.catSafetyScore ?? 0
-        let cat10 = score10(fromHundred: score)
+        let cat10 = score
         let pros = vm.catBenefits
         let risks = vm.catConcerns
         let narrative = vm.catNarrative
@@ -520,94 +522,39 @@ struct ResultView: View {
 
     // MARK: — Share helpers
     
-    /// Share with backend URL generation
+    /// Share analysis using the backend-generated URL
     private func prepareShareWithURL() async {
         isSharing = true
         shareError = nil
         
-        do {
-            let result = try await shareService.shareAnalysis(
-                analysis: vm.analysis,
-                image: resolvedImage,
-                productName: vm.productName,
-                category: vm.category
-            )
+        // Check if we have a ProductAnalysis with backend ID
+        guard let productAnalysis = vm.productAnalysis else {
+            // Fallback: share without URL if no backend analysis available
+            let score = vm.overallScoreHundred
+            let shareText = shareService.formatShareText(name: vm.productName, score: score)
             
-            // Create share items with URL
-            var items: [Any] = []
-            let selected10 = score10(fromHundred: vm.overallScoreHundred)
-            let focusLabel: String = {
-                switch vm.selectedSection {
-                case .children: return "Kids"
-                case .dogs:     return "Dogs"
-                case .cats:     return "Cats"
-                }
-            }()
-            let summary = "SafeSnap — \(vm.productName) (\(vm.category)) — Safety: \(selected10)/10 (\(focusLabel))\n\nView full report: \(result.shareURL.absoluteString)"
-            items.append(summary)
-            items.append(result.shareURL)
+            var items: [Any] = [shareText]
+            if let image = resolvedImage {
+                items.append(image)
+            }
             
-            await MainActor.run {
-                sharePayload = SharePayload(items: items)
-                isSharing = false
-            }
-        } catch {
-            await MainActor.run {
-                shareError = error.localizedDescription
-                isSharing = false
-            }
+            sharePayload = SharePayload(items: items)
+            isSharing = false
+            return
         }
-    }
-    
-    /// Legacy local-only share (fallback)
-    private func prepareShare() {
-        var items: [Any] = []
-        let selected10 = score10(fromHundred: vm.overallScoreHundred)
-        let focusLabel: String = {
-            switch vm.selectedSection {
-            case .children: return "Kids"
-            case .dogs:     return "Dogs"
-            case .cats:     return "Cats"
-            }
-        }()
-        let summary = "SafeSnap — \(vm.productName) (\(vm.category)) — Safety: \(selected10)/10 (\(focusLabel))"
-        items.append(summary)
-
-        if let ui = vm.image { items.append(ui) }
-        sharePayload = SharePayload(items: items)
-    }
-
-    private func exportCurrentResultAsJSON() -> URL? {
-        struct Payload: Codable {
-            let productName: String
-            let category: String
-            let score: Int
-            let date: Date
-            let analysis: SafetyAnalysisResponse
-        }
-        let payload = Payload(
-            productName: vm.productName,
-            category: vm.category,
-            score: score10(fromHundred: vm.overallScoreHundred),
-            date: vm.date,
-            analysis: vm.analysis
-        )
+        
         do {
-            let enc = JSONEncoder()
-            enc.dateEncodingStrategy = .iso8601
-            let data = try enc.encode(payload)
-            let safeName = vm.productName.replacingOccurrences(of: "/", with: "-")
-            return try writeTemp(data: data, filename: "SafeSnap-\(safeName)-\(vm.date.ISO8601Format()).json")
+            let result = try shareService.generateShareContent(for: productAnalysis)
+            
+            // Activity items: share text + URL
+            let items: [Any] = [result.shareText, result.shareURL]
+            
+            sharePayload = SharePayload(items: items)
+            isSharing = false
         } catch {
-            print("Share export failed:", error)
-            return nil
+            shareError = error.localizedDescription
+            isSharing = false
         }
-    }
-
-    private func writeTemp(data: Data, filename: String) throws -> URL {
-        let url = FileManager.default.temporaryDirectory.appendingPathComponent(filename)
-        try data.write(to: url, options: .atomic)
-        return url
     }
 }
 
@@ -654,11 +601,11 @@ fileprivate func scoreColor(_ score10: Int) -> Color {
     return .orange
 }
 
-fileprivate func score10(fromHundred value: Int) -> Int {
-    // Convert 0–100 → 0–10 with rounding
-    let clamped = max(0, min(100, value))
-    return Int(round(Double(clamped) / 10.0))
-}
+//fileprivate func score10(fromHundred value: Int) -> Int {
+//    // Convert 0–100 → 0–10 with rounding
+//    let clamped = max(0, min(100, value))
+//    return Int(round(Double(clamped) / 10.0))
+//}
 
 // MARK: - ZoomableImageView (UIScrollView-backed)
 struct ZoomableImageView: UIViewRepresentable {

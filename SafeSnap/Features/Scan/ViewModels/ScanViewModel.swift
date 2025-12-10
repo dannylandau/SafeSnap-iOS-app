@@ -95,7 +95,13 @@ final class ScanViewModel: ObservableObject {
                 )
                 let durationText = await stopAndRecordDuration()
                 if let result = await coordinator.latestHistoryItem {
-                    let viewModel = RecognitionResultViewModel(image: uiImage, from: result, scanDurationDescription: durationText)
+                    let productAnalysis = await coordinator.latestProductAnalysis
+                    let viewModel = RecognitionResultViewModel(
+                        image: uiImage,
+                        from: result,
+                        scanDurationDescription: durationText,
+                        productAnalysis: productAnalysis
+                    )
                     await MainActor.run {
                         self.resultVM = viewModel
                         self.phase = .result(viewModel)

@@ -152,7 +152,7 @@ private struct HistoryListRow: View {
 
     private var formattedScore: String {
         let normalized = max(0, min(100, item.analysis.childSafetyScore))
-        return String(format: "%.0f", Double(normalized) / 10.0)
+        return String(format: "%.0f", Double(normalized))
     }
 
     private var scoreColor: Color {

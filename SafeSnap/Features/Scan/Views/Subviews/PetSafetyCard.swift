@@ -36,7 +36,7 @@ struct PetSafetyCard: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(
             RoundedRectangle(cornerRadius: 28, style: .continuous)
-                .fill(.background)
+                .fill(Color(uiColor: .systemGray6))
                 .shadow(color: Color.black.opacity(0.05), radius: 20, x: 0, y: 10)
         )
     }

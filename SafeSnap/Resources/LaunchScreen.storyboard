@@ -1,0 +1,67 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<document type="com.apple.InterfaceBuilder3.CocoaTouch.Storyboard.XIB" version="3.0" toolsVersion="24412" targetRuntime="iOS.CocoaTouch" propertyAccessControl="none" useAutolayout="YES" useTraitCollections="YES" useSafeAreas="YES" colorMatched="YES">
+    <device id="retina6_12" orientation="portrait" appearance="light"/>
+    <dependencies>
+        <plugIn identifier="com.apple.InterfaceBuilder.IBCocoaTouchPlugin" version="24405"/>
+        <capability name="Safe area layout guides" minToolsVersion="9.0"/>
+        <capability name="System colors in document resources" minToolsVersion="11.0"/>
+        <capability name="documents saved in the Xcode 8 format" minToolsVersion="8.0"/>
+    </dependencies>
+    <scenes>
+        <!--View Controller-->
+        <scene sceneID="launch-scene">
+            <objects>
+                <viewController id="launch-vc" sceneMemberID="viewController">
+                    <view key="view" contentMode="scaleToFill" id="launch-view">
+                        <rect key="frame" x="0.0" y="0.0" width="393" height="852"/>
+                        <autoresizingMask key="autoresizingMask" widthSizable="YES" heightSizable="YES"/>
+                        <subviews>
+                            <imageView clipsSubviews="YES" userInteractionEnabled="NO" contentMode="scaleAspectFit" horizontalHuggingPriority="251" verticalHuggingPriority="251" image="icon" translatesAutoresizingMaskIntoConstraints="NO" id="launch-icon">
+                                <rect key="frame" x="136.66666666666666" y="391" width="119.99999999999997" height="120"/>
+                                <constraints>
+                                    <constraint firstAttribute="height" constant="120" id="icon-height"/>
+                                    <constraint firstAttribute="width" constant="120" id="icon-width"/>
+                                </constraints>
+                            </imageView>
+                            <label opaque="NO" userInteractionEnabled="NO" contentMode="left" horizontalHuggingPriority="251" verticalHuggingPriority="251" text="Loading ..." textAlignment="natural" lineBreakMode="tailTruncation" baselineAdjustment="alignBaselines" adjustsFontSizeToFit="NO" translatesAutoresizingMaskIntoConstraints="NO" id="DVN-NZ-hq2">
+                                <rect key="frame" x="157" y="792" width="79" height="21"/>
+                                <fontDescription key="fontDescription" type="system" pointSize="17"/>
+                                <color key="textColor" systemColor="systemGrayColor"/>
+                                <nil key="highlightedColor"/>
+                            </label>
+                            <imageView clipsSubviews="YES" userInteractionEnabled="NO" contentMode="scaleAspectFit" horizontalHuggingPriority="251" verticalHuggingPriority="251" image="archie_text" translatesAutoresizingMaskIntoConstraints="NO" id="0Ym-TW-Yhr">
+                                <rect key="frame" x="81.666666666666686" y="660" width="230" height="98"/>
+                                <constraints>
+                                    <constraint firstAttribute="height" constant="98" id="YXU-nD-VY5"/>
+                                    <constraint firstAttribute="width" constant="230" id="eTE-8n-qgM"/>
+                                </constraints>
+                            </imageView>
+                        </subviews>
+                        <viewLayoutGuide key="safeArea" id="launch-safe"/>
+                        <color key="backgroundColor" systemColor="systemBackgroundColor"/>
+                        <constraints>
+                            <constraint firstItem="DVN-NZ-hq2" firstAttribute="bottom" secondItem="launch-safe" secondAttribute="bottom" constant="29" id="8zi-41-m66"/>
+                            <constraint firstItem="DVN-NZ-hq2" firstAttribute="centerX" secondItem="launch-safe" secondAttribute="centerX" id="FS1-c4-TiP"/>
+                            <constraint firstItem="launch-icon" firstAttribute="centerX" secondItem="launch-safe" secondAttribute="centerX" id="icon-centerX"/>
+                            <constraint firstItem="launch-icon" firstAttribute="centerY" secondItem="launch-safe" secondAttribute="centerY" id="icon-centerY"/>
+                            <constraint firstItem="0Ym-TW-Yhr" firstAttribute="centerX" secondItem="launch-safe" secondAttribute="centerX" id="uJ6-v5-W6Z"/>
+                            <constraint firstItem="launch-safe" firstAttribute="bottom" secondItem="0Ym-TW-Yhr" secondAttribute="bottom" constant="26" id="y3i-ym-043"/>
+                        </constraints>
+                    </view>
+                </viewController>
+                <placeholder placeholderIdentifier="IBFirstResponder" id="launch-firstResponder" userLabel="First Responder" customClass="UIResponder" sceneMemberID="firstResponder"/>
+            </objects>
+            <point key="canvasLocation" x="-0.76335877862595414" y="0.0"/>
+        </scene>
+    </scenes>
+    <resources>
+        <image name="archie_text" width="230" height="99"/>
+        <image name="icon" width="49" height="44"/>
+        <systemColor name="systemBackgroundColor">
+            <color white="1" alpha="1" colorSpace="custom" customColorSpace="genericGamma22GrayColorSpace"/>
+        </systemColor>
+        <systemColor name="systemGrayColor">
+            <color red="0.55686274509803924" green="0.55686274509803924" blue="0.57647058823529407" alpha="1" colorSpace="custom" customColorSpace="sRGB"/>
+        </systemColor>
+    </resources>
+</document>

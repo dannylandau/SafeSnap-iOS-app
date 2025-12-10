@@ -37,7 +37,7 @@ private actor FileScanImageStore: ScanImageStoring {
         } else {
             let jpgURL = imagesDir.appendingPathComponent("IMG_\(id).jpg")
             guard let jpg = image.jpegData(compressionQuality: 0.9) else {
-                throw NSError(domain: "SafeSnap", code: -11, userInfo: [NSLocalizedDescriptionKey: "Unable to encode image to JPEG"])
+                throw NSError(domain: "Archie", code: -11, userInfo: [NSLocalizedDescriptionKey: "Unable to encode image to JPEG"])
             }
             try jpg.write(to: jpgURL, options: .atomic)
             format = .jpg
@@ -45,7 +45,7 @@ private actor FileScanImageStore: ScanImageStoring {
         }
 
         guard UIImage(contentsOfFile: fullURL.path) != nil else {
-            throw NSError(domain: "SafeSnap", code: -12, userInfo: [NSLocalizedDescriptionKey: "Written image is unreadable at \(fullURL.lastPathComponent)"])
+                throw NSError(domain: "Archie", code: -12, userInfo: [NSLocalizedDescriptionKey: "Written image is unreadable at \(fullURL.lastPathComponent)"])
         }
 
         let pixelSize = CGSize(width: Int(image.size.width * image.scale), height: Int(image.size.height * image.scale))
@@ -53,7 +53,7 @@ private actor FileScanImageStore: ScanImageStoring {
         let thumbURL = imagesDir.appendingPathComponent("IMG_\(id)_thumb.jpg")
         let thumb = try await makeThumbnail(from: image, maxEdge: 600)
         guard let thumbData = thumb.jpegData(compressionQuality: 0.8) else {
-            throw NSError(domain: "SafeSnap", code: -13, userInfo: [NSLocalizedDescriptionKey: "Unable to encode thumbnail jpeg"])
+                throw NSError(domain: "Archie", code: -13, userInfo: [NSLocalizedDescriptionKey: "Unable to encode thumbnail jpeg"])
         }
         try thumbData.write(to: thumbURL, options: .atomic)
 
@@ -176,7 +176,7 @@ final class ScanAnalysisCoordinator: ObservableObject {
     @Published var explainability: AnalysisExtras? = nil
     @Published var visionBestGuess: String? = nil
     @Published var visionWebEntities: [String] = []
-    
+
     // MARK: - Dependencies
     
     private let apiService: SafeSnapAPIService
@@ -206,7 +206,7 @@ final class ScanAnalysisCoordinator: ObservableObject {
     }
     
     // MARK: - Init
-    
+
     init(
         apiService: SafeSnapAPIService = .shared,
         storageService: ImageStorageService = FirebaseStorageService.shared,
@@ -239,7 +239,7 @@ final class ScanAnalysisCoordinator: ObservableObject {
         let productAnalysis: ProductAnalysis
         do {
             productAnalysis = try await apiService.analyze(
-                image: image,
+            image: image,
                 includeDogs: options.includeDogs,
                 includeCats: options.includeCats,
                 includeChildren: options.includeChildren
@@ -262,7 +262,7 @@ final class ScanAnalysisCoordinator: ObservableObject {
         // Convert to legacy SafetyAnalysisResponse for backward compatibility
         let result = convertToSafetyAnalysisResponse(productAnalysis, options: options)
         self.safetyAnalysis = result
-        
+
         // Build explainability extras
         self.explainability = buildExtras(from: productAnalysis)
         
@@ -284,7 +284,7 @@ final class ScanAnalysisCoordinator: ObservableObject {
             includeCats: options.includeCats,
             includeChildren: options.includeChildren
         )
-        
+
         let product = ProductIdentification(
             productType: productAnalysis.category,
             productName: productAnalysis.name,
@@ -296,7 +296,7 @@ final class ScanAnalysisCoordinator: ObservableObject {
             bestGuess: productAnalysis.name,
             webEntities: []
         )
-        
+
         let item = ScanHistoryBuilder.build(
             product: product,
             analysis: result,
@@ -304,7 +304,7 @@ final class ScanAnalysisCoordinator: ObservableObject {
             imageData: imageData,
             userToggles: toggles,
             visionContextRef: nil,
-            model: "safesnap-backend",
+            model: "archie-backend",
             promptVersion: "v1-api"
         )
         
@@ -336,13 +336,12 @@ final class ScanAnalysisCoordinator: ObservableObject {
         partial = nil
         visionBestGuess = nil
         visionWebEntities = []
-        visionDuration = nil
         fastDuration = nil
         smartDuration = nil
         isComplete = false
         currentPhase = .preparing
     }
-    
+
     /// Sync analysis to backend (upload image + save history) - runs in background
     private func syncToBackend(productAnalysis: ProductAnalysis, image: UIImage, options: SafetyOptions) async {
         do {
@@ -498,10 +497,10 @@ final class ScanAnalysisCoordinator: ObservableObject {
         let kidNarrative = result.kidNarrative.trimmingCharacters(in: .whitespacesAndNewlines)
         
         let dogWarns = result.petSafety.dogs.map {
-            GeminiSafetyDTO.PetWarn(severity: $0.severity.rawValue, title: $0.warning, reason: $0.reason)
+            SafetyDTO.PetWarning(severity: $0.severity.rawValue, title: $0.warning, reason: $0.reason)
         }
         let catWarns = result.petSafety.cats.map {
-            GeminiSafetyDTO.PetWarn(severity: $0.severity.rawValue, title: $0.warning, reason: $0.reason)
+            SafetyDTO.PetWarning(severity: $0.severity.rawValue, title: $0.warning, reason: $0.reason)
         }
         
         return GeminiSafetyDTO(
@@ -530,7 +529,7 @@ final class ScanAnalysisCoordinator: ObservableObject {
             dataSources: ["SafeSnap Backend API"]
         )
     }
-    
+
     private func seconds(_ duration: Duration) -> Double {
         let components = duration.components
         let attosecondsPerSecond = 1_000_000_000_000_000_000.0

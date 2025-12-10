@@ -125,34 +125,34 @@ struct AlertPresenter: ViewModifier {
         }
 
         // AnalyzerError specifics (stage, status, etc.) if available
-        if let ae = error as? SafetyAnalyzer.AnalyzerError {
-            switch ae {
-            case .recognitionFailed(let reason):
-                lines.append("AnalyzerError: recognitionFailed(reason=\(reason))")
-            case .timedOut(let stage, let seconds):
-                lines.append("AnalyzerError: timedOut(stage=\(stage.rawValue), seconds=\(seconds))")
-            case .cancelled(let stage):
-                lines.append("AnalyzerError: cancelled(stage=\(stage.rawValue))")
-            case .network(let stage, let underlying):
-                lines.append("AnalyzerError: network(stage=\(stage.rawValue))")
-                lines.append(contentsOf: formatUnderlyingHeader())
-                lines.append(contentsOf: dumpErrorChain(underlying))
-            case .rateLimited(let stage, let retryAfter, let underlying):
-                lines.append("AnalyzerError: rateLimited(stage=\(stage.rawValue), retryAfter=\(retryAfter.map(String.init) ?? "nil"))")
-                lines.append(contentsOf: formatUnderlyingHeader())
-                lines.append(contentsOf: dumpErrorChain(underlying))
-            case .server(let stage, let status, let underlying):
-                lines.append("AnalyzerError: server(stage=\(stage.rawValue), status=\(status))")
-                lines.append(contentsOf: formatUnderlyingHeader())
-                lines.append(contentsOf: dumpErrorChain(underlying))
-            case .invalidModelResponse(let stage, let reason):
-                lines.append("AnalyzerError: invalidModelResponse(stage=\(stage.rawValue), reason=\(reason))")
-            case .other(let stage, let underlying):
-                lines.append("AnalyzerError: other(stage=\(stage.rawValue))")
-                lines.append(contentsOf: formatUnderlyingHeader())
-                lines.append(contentsOf: dumpErrorChain(underlying))
-            }
-        }
+//        if let ae = error as? AnalyzerError {
+//            switch ae {
+//            case .recognitionFailed(let reason):
+//                lines.append("AnalyzerError: recognitionFailed(reason=\(reason))")
+//            case .timedOut(let stage, let seconds):
+//                lines.append("AnalyzerError: timedOut(stage=\(stage.rawValue), seconds=\(seconds))")
+//            case .cancelled(let stage):
+//                lines.append("AnalyzerError: cancelled(stage=\(stage.rawValue))")
+//            case .network(let stage, let underlying):
+//                lines.append("AnalyzerError: network(stage=\(stage.rawValue))")
+//                lines.append(contentsOf: formatUnderlyingHeader())
+//                lines.append(contentsOf: dumpErrorChain(underlying))
+//            case .rateLimited(let stage, let retryAfter, let underlying):
+//                lines.append("AnalyzerError: rateLimited(stage=\(stage.rawValue), retryAfter=\(retryAfter.map(String.init) ?? "nil"))")
+//                lines.append(contentsOf: formatUnderlyingHeader())
+//                lines.append(contentsOf: dumpErrorChain(underlying))
+//            case .server(let stage, let status, let underlying):
+//                lines.append("AnalyzerError: server(stage=\(stage.rawValue), status=\(status))")
+//                lines.append(contentsOf: formatUnderlyingHeader())
+//                lines.append(contentsOf: dumpErrorChain(underlying))
+//            case .invalidModelResponse(let stage, let reason):
+//                lines.append("AnalyzerError: invalidModelResponse(stage=\(stage.rawValue), reason=\(reason))")
+//            case .other(let stage, let underlying):
+//                lines.append("AnalyzerError: other(stage=\(stage.rawValue))")
+//                lines.append(contentsOf: formatUnderlyingHeader())
+//                lines.append(contentsOf: dumpErrorChain(underlying))
+//            }
+//        }
 
         // NSError basics
         lines.append("Domain: \(nsError.domain)")
@@ -210,17 +210,17 @@ struct AlertPresenter: ViewModifier {
         }
 
         // Recurse into AnalyzerError-assigned underlying where possible
-        if let ae = error as? SafetyAnalyzer.AnalyzerError {
-            switch ae {
-            case .network(_, let underlying),
-                 .rateLimited(_, _, let underlying),
-                 .server(_, _, let underlying),
-                 .other(_, let underlying):
-                out.append(prefix + "→ underlying:")
-                out.append(contentsOf: dumpErrorChain(underlying, level: level + 1, maxDepth: maxDepth))
-            default: break
-            }
-        }
+//        if let ae = error as? SafetyAnalyzer.AnalyzerError {
+//            switch ae {
+//            case .network(_, let underlying),
+//                 .rateLimited(_, _, let underlying),
+//                 .server(_, _, let underlying),
+//                 .other(_, let underlying):
+//                out.append(prefix + "→ underlying:")
+//                out.append(contentsOf: dumpErrorChain(underlying, level: level + 1, maxDepth: maxDepth))
+//            default: break
+//            }
+//        }
 
         if let underlying = ns.userInfo[NSUnderlyingErrorKey] as? Error {
             out.append(prefix + "→ underlying(NSUnderlyingErrorKey):")
