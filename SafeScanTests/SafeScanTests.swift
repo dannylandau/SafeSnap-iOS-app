@@ -74,7 +74,7 @@ final class ArchieEndToEndTests: XCTestCase {
         let historyService = makeHistoryService()
         let apiService = MockAPIService()
         apiService.shouldFail = true
-        apiService.failureError = SafeSnapAPIError.networkError(underlying: URLError(.notConnectedToInternet))
+        apiService.failureError = ArchieAPIError.networkError(underlying: URLError(.notConnectedToInternet))
         
         let imageStore = InMemoryImageStore()
         let coordinator = ScanAnalysisCoordinator(
@@ -198,7 +198,7 @@ private final class MockAPIService: ProductAnalyzing {
     var analyzeCallCount = 0
     var stubAnalysis: ProductAnalysis?
     var shouldFail = false
-    var failureError: Error = SafeSnapAPIError.networkError(underlying: URLError(.unknown))
+    var failureError: Error = ArchieAPIError.networkError(underlying: URLError(.unknown))
     
     func analyze(
         image: UIImage,
@@ -213,7 +213,7 @@ private final class MockAPIService: ProductAnalyzing {
         }
         
         guard let analysis = stubAnalysis else {
-            throw SafeSnapAPIError.noData
+            throw ArchieAPIError.noData
         }
         return analysis
     }

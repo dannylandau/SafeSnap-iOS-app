@@ -208,7 +208,7 @@ final class ScanAnalysisCoordinator: ObservableObject {
     // MARK: - Init
 
     init(
-        apiService: ProductAnalyzing = SafeSnapAPIService.shared,
+        apiService: ProductAnalyzing = ArchieAPIService.shared,
         storageService: ImageStorageService = FirebaseStorageService.shared,
         historyService: ScanHistoryRecording,
         imageStore: ScanImageStoring = FileScanImageStore(),
@@ -526,7 +526,7 @@ final class ScanAnalysisCoordinator: ObservableObject {
             labels: [],
             ocrHits: [],
             rulesTriggered: productAnalysis.analysisMetadata?.rulesTriggered ?? [],
-            dataSources: ["SafeSnap Backend API"]
+            dataSources: ["Archie Backend API"]
         )
     }
 

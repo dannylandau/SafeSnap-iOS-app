@@ -1,0 +1,267 @@
+//
+//  ScanViewModel.swift
+//  Archie
+//
+//  Created by Marcin Grześkowiak on 22/07/2025.
+//
+
+import Foundation
+import PhotosUI
+import SwiftUI
+import Combine
+
+@MainActor
+protocol ScanAnalysisCoordinating: AnyObject {
+    func startGeminiScan(image: UIImage, options: SafetyOptions) async throws
+    func cancelAnalysis()
+    var latestHistoryItem: ScanHistoryItem? { get }
+    var stage: AnalysisStage { get }
+    var fastDuration: TimeInterval? { get }
+    var smartDuration: TimeInterval? { get }
+    var stagePublisher: AnyPublisher<AnalysisStage, Never> { get }
+    var partialPublisher: AnyPublisher<String?, Never> { get }
+    var visionBestGuessPublisher: AnyPublisher<String?, Never> { get }
+    var visionWebEntitiesPublisher: AnyPublisher<[String], Never> { get }
+    var latestProductAnalysis: ProductAnalysis? { get }
+}
+
+extension ScanAnalysisCoordinator: ScanAnalysisCoordinating {}
+
+@MainActor
+final class ScanViewModel: ObservableObject {
+    @Published var resultVM: RecognitionResultViewModel? = nil
+    @Published var phase: ScanPhase = .idle
+    @Published var scanError: ScanError? = nil
+    @Published var scanDurationText: String? = nil
+    @Published private(set) var scanDurationEnabled: Bool
+    @Published private(set) var stage: AnalysisStage = .vision
+    @Published private(set) var partialStatus: String? = nil
+    @Published private(set) var visionBestGuess: String? = nil
+    @Published private(set) var visionWebEntities: [String] = []
+    
+    @MainActor let alerts = AlertCenter()
+
+    private var lastImageData: Data?
+    private var lastUIImage: UIImage?
+    private var lastIncludeDog: Bool = false
+    private var lastIncludeCat: Bool = false
+    private var lastIncludeChildren: Bool = false
+
+    let coordinator: ScanAnalysisCoordinating
+    private let durationTracker: ScanDurationTracking
+    private let durationFormatter: ScanDurationFormatting
+    private let featureFlags: FeatureFlagProviding
+    private var cancellables: Set<AnyCancellable> = []
+
+    init(
+        coordinator: ScanAnalysisCoordinating,
+        durationTracker: ScanDurationTracking = ScanDurationTracker(clock: .init()),
+        durationFormatter: ScanDurationFormatting = ScanDurationFormatter(),
+        featureFlags: FeatureFlagProviding = FeatureFlagService.shared
+    ) {
+        self.coordinator = coordinator
+        self.durationTracker = durationTracker
+        self.durationFormatter = durationFormatter
+        self.featureFlags = featureFlags
+        scanDurationEnabled = featureFlags.isEnabled(.scanDurationTimer)
+        bindCoordinator()
+    }
+
+    func handleImage(_ image: UIImage) {
+        Task { @MainActor in
+            self.resultVM = nil
+            self.phase = .analyzing(image: image)
+        }
+    }
+
+    @MainActor
+    func beginScan(with imageData: Data, uiImage: UIImage, includeDog: Bool, includeCat: Bool, includeChildren: Bool) {
+        self.handleImage(uiImage)
+        lastImageData = imageData
+        lastUIImage = uiImage
+        lastIncludeDog = includeDog
+        lastIncludeCat = includeCat
+        lastIncludeChildren = includeChildren
+        durationTracker.reset()
+        if scanDurationEnabled {
+            durationTracker.start()
+        }
+        scanDurationText = nil
+
+        Task {
+            do {
+                try await coordinator.startGeminiScan(
+                    image: uiImage,
+                    options: SafetyOptions(includeDogs: includeDog, includeCats: includeCat, includeChildren: includeChildren)
+                )
+                let durationText = await stopAndRecordDuration()
+                if let result = await coordinator.latestHistoryItem {
+                    let productAnalysis = await coordinator.latestProductAnalysis
+                    let viewModel = RecognitionResultViewModel(
+                        image: uiImage,
+                        from: result,
+                        scanDurationDescription: durationText,
+                        productAnalysis: productAnalysis
+                    )
+                    await MainActor.run {
+                        self.resultVM = viewModel
+                        self.phase = .result(viewModel)
+                    }
+                }
+            } catch is CancellationError {
+                await MainActor.run {
+                    self.durationTracker.reset()
+                    self.scanDurationText = nil
+                }
+                await MainActor.run {
+                    self.phase = .idle
+                }
+            } catch let error as ScanError {
+                _ = await stopAndRecordDuration()
+                if error.localizedDescription.contains("Recognition confidence too low") {
+                    await MainActor.run {
+                        self.phase = .idle
+                        self.resultVM = nil
+                        self.scanError = nil
+                        self.showLowRecognitionRetakeAlert()
+                    }
+                    return
+                }
+                await MainActor.run {
+                    self.phase = .error
+                    self.scanError = error
+                    #if DEBUG
+                    print(error.localizedDescription)
+                    #endif
+                    alerts.show(AppAlert.from(error: error, retry: {
+                        [weak self] in self?.retryLastScan()
+                    }))
+                }
+            } catch {
+                _ = await stopAndRecordDuration()
+                if error.localizedDescription.contains("Recognition confidence too low") {
+                    await MainActor.run {
+                        self.phase = .idle
+                        self.resultVM = nil
+                        self.scanError = nil
+                        self.showLowRecognitionRetakeAlert()
+                    }
+                    return
+                }
+                await MainActor.run {
+                    self.phase = .error
+                    self.scanError = .openAIFailed(reason: error.localizedDescription)
+                    #if DEBUG
+                    print(error.localizedDescription)
+                    #endif
+                    alerts.show(AppAlert.from(error: error, retry: {
+                        [weak self] in self?.retryLastScan()
+                    }))
+                }
+            }
+        }
+    }
+
+    @MainActor
+    private func showLowRecognitionRetakeAlert() {
+        let tips = """
+        Can't recognize the product clearly.
+
+        Try:
+        • Scan the product label
+        • Center the object
+        • Photograph the front of the package
+        """
+        // Show alert with a Retake primary action (reset to idle so the user can reshoot)
+        alerts.show(
+            AppAlert(title: "Need a clearer photo",
+                     message: tips,
+                     actions: [
+                        .init(title: "Retake",
+                              role: .normal,
+                              perform: { [weak self] in
+                                  self?.cancelScan()
+                              }),
+                        .init(title: "Dismiss",
+                              role: .cancel,
+                              perform: {})
+                     ])
+        )
+    }
+
+    @MainActor func retryLastScan() {
+        guard let data = lastImageData, let image = lastUIImage else { return }
+        beginScan(with: data, uiImage: image, includeDog: lastIncludeDog, includeCat: lastIncludeCat, includeChildren: lastIncludeChildren)
+    }
+    
+    func cancelScan() {
+        #if DEBUG
+        print("🛑 Cancelling scan")
+        #endif
+        Task { @MainActor in
+            self.coordinator.cancelAnalysis()
+            self.phase = .idle
+            self.resultVM = nil
+            self.scanError = nil
+            self.lastImageData = nil
+            self.lastUIImage = nil
+            self.durationTracker.reset()
+            self.scanDurationText = nil
+            self.stage = .vision
+            self.partialStatus = nil
+            self.visionBestGuess = nil
+            self.visionWebEntities = []
+        }
+    }
+
+    private func stopAndRecordDuration() async -> String? {
+        await MainActor.run {
+            guard self.scanDurationEnabled else { return nil }
+            let duration = self.durationTracker.stop()
+            let formatted = duration.map { self.durationFormatter.string(from: $0) }
+            self.scanDurationText = formatted
+            return formatted
+        }
+    }
+
+    @MainActor
+    func setScanDurationTrackingEnabled(_ isEnabled: Bool) {
+        featureFlags.setEnabled(.scanDurationTimer, value: isEnabled)
+        scanDurationEnabled = isEnabled
+        if !isEnabled {
+            durationTracker.reset()
+            scanDurationText = nil
+        }
+    }
+
+    @MainActor
+    private func bindCoordinator() {
+        coordinator.stagePublisher
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] stage in
+                self?.stage = stage
+            }
+            .store(in: &cancellables)
+
+        coordinator.partialPublisher
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] message in
+                self?.partialStatus = message
+            }
+            .store(in: &cancellables)
+
+        coordinator.visionBestGuessPublisher
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] guess in
+                self?.visionBestGuess = guess
+            }
+            .store(in: &cancellables)
+
+        coordinator.visionWebEntitiesPublisher
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] entities in
+                self?.visionWebEntities = entities
+            }
+            .store(in: &cancellables)
+    }
+}

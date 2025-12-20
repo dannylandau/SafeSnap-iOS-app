@@ -62,7 +62,7 @@ final class ScanAnalysisCoordinatorTests: XCTestCase {
     func test_startGeminiScan_propagatesAPIFailure() async {
         let apiService = MockAPIService()
         apiService.shouldFail = true
-        apiService.failureError = SafeSnapAPIError.networkError(underlying: URLError(.notConnectedToInternet))
+        apiService.failureError = ArchieAPIError.networkError(underlying: URLError(.notConnectedToInternet))
         
         let coordinator = ScanAnalysisCoordinator(
             apiService: apiService,
@@ -202,7 +202,7 @@ private final class MockAPIService: ProductAnalyzing {
     var capturedOptions: (includeDogs: Bool, includeCats: Bool, includeChildren: Bool)?
     var stubAnalysis: ProductAnalysis?
     var shouldFail = false
-    var failureError: Error = SafeSnapAPIError.networkError(underlying: URLError(.unknown))
+    var failureError: Error = ArchieAPIError.networkError(underlying: URLError(.unknown))
     
     func analyze(
         image: UIImage,
@@ -218,7 +218,7 @@ private final class MockAPIService: ProductAnalyzing {
         }
         
         guard let analysis = stubAnalysis else {
-            throw SafeSnapAPIError.noData
+            throw ArchieAPIError.noData
         }
         return analysis
     }

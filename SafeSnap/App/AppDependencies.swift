@@ -18,7 +18,7 @@ final class AppDependencies {
     
     // MARK: - API Services (Backend-based)
     
-    let apiService: SafeSnapAPIService
+    let apiService: ArchieAPIService
     let storageService: FirebaseStorageService
     let historyService: ScanHistoryService
     
@@ -29,7 +29,7 @@ final class AppDependencies {
         self.onboardingState = OnboardingStateStore()
         
         // Configure API service with token provider
-        self.apiService = SafeSnapAPIService(
+        self.apiService = ArchieAPIService(
             environment: .production,
             tokenProvider: { [weak userSession] in
                 try await userSession?.getIdToken()

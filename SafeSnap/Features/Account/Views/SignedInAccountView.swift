@@ -189,7 +189,7 @@ struct SignedInAccountView: View {
 
     private var footer: some View {
         VStack(spacing: 4) {
-            Text("SafeSnap \(viewModel.appVersion)")
+            Text("Archie \(viewModel.appVersion)")
             Text("Powered by Google Gemini AI")
             if viewModel.demoMode {
                 Text("Demo version – all features functional")
@@ -201,7 +201,7 @@ struct SignedInAccountView: View {
     }
 
     private func shareApp() {
-        sharePayload = SharePayload(items: ["Check out SafeSnap — keeping families and pets safe."])
+        sharePayload = SharePayload(items: ["Check out Archie — keeping families and pets safe."])
     }
 
     private var dragIndicator: some View {

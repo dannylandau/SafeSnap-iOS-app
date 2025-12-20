@@ -19,7 +19,7 @@ struct WelcomeView: View {
                 .frame(width: 100)
                 .padding()
 
-            Text("Welcome to SafeScan")
+            Text("Welcome to Archie")
                 .font(.largeTitle.bold())
 
             Text("Scan food, toys, and household products to check their safety using AI.")

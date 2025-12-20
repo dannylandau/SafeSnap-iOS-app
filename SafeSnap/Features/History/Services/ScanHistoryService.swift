@@ -18,14 +18,14 @@ class ScanHistoryService: ObservableObject {
 
     private let fileURL: URL
     private let saveQueue = DispatchQueue(label: "scan.history.save.queue")
-    private let apiService: SafeSnapAPIService
+    private let apiService: ArchieAPIService
     private weak var userSession: UserSession?
 
     // MARK: - Init
 
     init(
         fileURL: URL? = nil,
-        apiService: SafeSnapAPIService = .shared,
+        apiService: ArchieAPIService = .shared,
         userSession: UserSession? = nil
     ) {
         if let customURL = fileURL {
@@ -176,7 +176,7 @@ class ScanHistoryService: ObservableObject {
             visionBestGuess: apiItem.name,
             visionWebEntities: [],
             analysis: safetyResponse,
-            model: "safesnap-backend",
+            model: "archie-backend",
             promptVersion: "v1-api",
             appVersion: Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.0"
         )
