@@ -1,8 +1,8 @@
-# SafeSnap API Documentation
+# Archie API Documentation
 
 ## Overview
 
-SafeSnap is a product safety analysis application that uses AI to analyze product images and provide safety information for children and pets.
+Archie is a product safety analysis application that uses AI to analyze product images and provide safety information for children and pets.
 
 **Base URL:** `https://be.archieml.com` (Production) | `http://localhost:4000` (Development)
 
@@ -26,7 +26,7 @@ SafeSnap is a product safety analysis application that uses AI to analyze produc
 
 ```
 ┌─────────────────┐     ┌─────────────────┐     ┌─────────────────┐
-│   Mobile App    │     │  Firebase Auth  │     │  SafeSnap API   │
+│   Mobile App    │     │  Firebase Auth  │     │  Archie API   │
 └────────┬────────┘     └────────┬────────┘     └────────┬────────┘
          │                       │                       │
          │  1. Sign in with      │                       │
@@ -197,7 +197,7 @@ Logout user (client-side token cleanup).
 
 ```
 ┌─────────────────┐     ┌─────────────────┐     ┌─────────────────┐
-│   Mobile App    │     │  SafeSnap API   │     │   Gemini AI     │
+│   Mobile App    │     │  Archie API   │     │   Gemini AI     │
 └────────┬────────┘     └────────┬────────┘     └────────┬────────┘
          │                       │                       │
          │  1. Capture/Select    │                       │
@@ -393,7 +393,7 @@ async function prepareImage(file) {
 
 ```
 ┌─────────────────┐     ┌─────────────────┐     ┌─────────────────┐
-│   Mobile App    │     │  SafeSnap API   │     │    Firestore    │
+│   Mobile App    │     │  Archie API   │     │    Firestore    │
 └────────┬────────┘     └────────┬────────┘     └────────┬────────┘
          │                       │                       │
          │  After successful     │                       │
@@ -526,7 +526,7 @@ Authorization: Bearer <firebase_id_token>
 
 ```
 ┌─────────────────┐     ┌─────────────────┐     ┌─────────────────┐
-│   Mobile App    │     │  SafeSnap API   │     │    Firestore    │
+│   Mobile App    │     │  Archie API   │     │    Firestore    │
 └────────┬────────┘     └────────┬────────┘     └────────┬────────┘
          │                       │                       │
          │  User taps "Share"    │                       │

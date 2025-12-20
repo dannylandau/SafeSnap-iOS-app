@@ -320,7 +320,7 @@ private extension ScanView {
                     .frame(maxWidth: .infinity, alignment: .leading)
                 }
                 progressRow(
-                    title: "Checking safety (SafeSnap Toxicity Service)",
+                    title: "Checking safety (Archie Safety Check)",
                     isActive: viewModel.stage == .fast,
                     isComplete: viewModel.stage == .smart
                 )

@@ -1,4 +1,4 @@
-# Contributing to SafeSnap
+# Contributing to Archie
 
 Thanks for your interest in contributing! 🚀
 
@@ -24,4 +24,4 @@ Thanks for your interest in contributing! 🚀
 
 ---
 
-You're awesome for helping make SafeSnap better 💚
+You're awesome for helping make Archie better 💚

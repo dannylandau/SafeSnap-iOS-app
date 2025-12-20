@@ -1,11 +1,12 @@
-# 📱 SafeSnap
+# 📱 Archie
 
 **AI-powered product safety scanner.**  
 Analyze product labels and packaging using Vision AI + OpenAI, check safety databases, and store scan history across sessions.
 
 ---
 
-![Build](https://github.com/dannylandau/SafeSnap-iOS-app/actions/workflows/unit_tests.yml/badge.svg)
+![Build](https://img.shields.io/github/actions/workflow/status/yourusername/archie/ci.yml)
+![License](https://img.shields.io/github/license/yourusername/archie)
 ![Platform](https://img.shields.io/badge/platform-iOS%2017%2B-blue)
 
 ---
@@ -67,12 +68,12 @@ Run tests in Xcode:
 ## 🔧 Setup
 
 ```bash
-git clone https://github.com/yourusername/safesnap.git
-cd safesnap
-open SafeSnap.xcodeproj
+git clone https://github.com/yourusername/archie.git
+cd archie
+open Archie.xcodeproj
 ```
 
-Replace the placeholder values inside `SafeSnap/Resources/GoogleService-Info.plist` with the file downloaded from the Firebase console (or copy your real file over that path). Update `SafeScan-Info.plist` with your reversed client ID under `CFBundleURLTypes` so Google authentication can hand control back to the app. The app will crash on launch if the configuration is missing or still contains the `REPLACE_WITH_…` placeholders so misconfiguration surfaces immediately during QA.
+Replace the placeholder values inside `Archie/Resources/GoogleService-Info.plist` with the file downloaded from the Firebase console (or copy your real file over that path). Update `Archie-Info.plist` with your reversed client ID under `CFBundleURLTypes` so Google authentication can hand control back to the app. The app will crash on launch if the configuration is missing or still contains the `REPLACE_WITH_…` placeholders so misconfiguration surfaces immediately during QA.
 
 ---
 
@@ -93,3 +94,8 @@ Replace the placeholder values inside `SafeSnap/Resources/GoogleService-Info.pli
 
 - [@marcingie](https://github.com/marcingie)
 
+---
+
+## 📜 License
+
+MIT © 2025 Archie
