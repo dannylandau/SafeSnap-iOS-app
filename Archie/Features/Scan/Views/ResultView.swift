@@ -530,7 +530,8 @@ struct ResultView: View {
         // Check if we have a ProductAnalysis with backend ID
         guard let productAnalysis = vm.productAnalysis else {
             // Fallback: share without URL if no backend analysis available
-            let score = vm.overallScoreHundred
+            // Convert from 0-100 to 0-10 scale (rounded)
+            let score = (vm.overallScoreHundred + 5) / 10
             let shareText = shareService.formatShareText(name: vm.productName, score: score)
             
             var items: [Any] = [shareText]

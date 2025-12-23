@@ -21,10 +21,11 @@ struct ScanBottomControlsView: View {
 
             ZStack {
                 Image("union")
+                    .renderingMode(.template)
                     .resizable()
                     .scaledToFill()
                     .frame(width: proxy.size.width, height: proxy.size.height + bottomInset + 40)
-//                    .clipped()
+                    .foregroundStyle(Color(.systemBackground))
                     .shadow(color: Color.black.opacity(0.15), radius: 16, y: -2)
                     .padding(.top, -100)
 
@@ -43,7 +44,7 @@ struct ScanBottomControlsView: View {
                     Button(action: onCapture) {
                         ZStack {
                             Circle()
-                                .fill(Color.white)
+                                .fill(Color.primary)
                                 .frame(width: cameraDiameter, height: cameraDiameter)
                             Circle()
                                 .strokeBorder(Color.black.opacity(0.6), lineWidth: 6)
@@ -66,7 +67,7 @@ struct ScanBottomControlsView: View {
                             .frame(width: 48, height: 48)
                             .background(
                                 RoundedRectangle(cornerRadius: 16, style: .continuous)
-                                    .fill(Color.white)
+                                    .fill(Color.secondarySystemBackground)
                                     .shadow(color: Color.black.opacity(0.05), radius: 6, y: 2)
                             )
                     }
