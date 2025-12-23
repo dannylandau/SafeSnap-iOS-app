@@ -22,7 +22,7 @@ final class ScanDurationTracker: ObservableObject, ScanDurationTracking {
     private let clock: ContinuousClock
     private var startInstant: ContinuousClock.Instant?
 
-    init(clock: ContinuousClock) {
+    nonisolated init(clock: ContinuousClock = ContinuousClock()) {
         self.clock = clock
     }
 

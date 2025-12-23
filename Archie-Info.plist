@@ -11,7 +11,17 @@
 			<string>FirebaseAuth</string>
 			<key>CFBundleURLSchemes</key>
 			<array>
-				<string>app-1-1156944150-ios-0b22a2d692d84179970037</string>
+				<string>app-1-1156944150-ios-3d0417ec6dccb2ca970037</string>
+			</array>
+		</dict>
+		<dict>
+			<key>CFBundleTypeRole</key>
+			<string>Editor</string>
+			<key>CFBundleURLName</key>
+			<string>GoogleSignIn</string>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>com.googleusercontent.apps.1156944150-3en9un05gv7hrq92jh9mpv31a0gpk6e2</string>
 			</array>
 		</dict>
 	</array>
