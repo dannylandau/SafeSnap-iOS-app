@@ -304,6 +304,7 @@ final class ScanAnalysisCoordinator: ObservableObject {
             imageData: imageData,
             userToggles: toggles,
             visionContextRef: nil,
+            productAnalysis: productAnalysis,
             model: "archie-backend",
             promptVersion: "v1-api"
         )

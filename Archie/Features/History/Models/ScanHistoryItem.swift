@@ -46,6 +46,9 @@ public struct ScanHistoryItem: Codable, Identifiable, Equatable {
     public let analysis: SafetyAnalysisResponse
     public let model: String
     public let promptVersion: String
+    
+    // Backend analysis (for sharing with URL)
+    public let productAnalysis: ProductAnalysis?
 
     // Provenance
     public let appVersion: String
@@ -53,7 +56,7 @@ public struct ScanHistoryItem: Codable, Identifiable, Equatable {
     public init(
         id: UUID = UUID(),
         createdAt: Date = Date(),
-        schemaVersion: Int = 2,
+        schemaVersion: Int = 3,
         imageFilename: String?,
         imageHash: String,
         userToggles: UserToggles,
@@ -68,6 +71,7 @@ public struct ScanHistoryItem: Codable, Identifiable, Equatable {
         analysis: SafetyAnalysisResponse,
         model: String,
         promptVersion: String,
+        productAnalysis: ProductAnalysis?,
         appVersion: String
     ) {
         self.id = id
@@ -87,6 +91,7 @@ public struct ScanHistoryItem: Codable, Identifiable, Equatable {
         self.analysis = analysis
         self.model = model
         self.promptVersion = promptVersion
+        self.productAnalysis = productAnalysis
         self.appVersion = appVersion
     }
 
@@ -107,7 +112,7 @@ public struct ScanHistoryItem: Codable, Identifiable, Equatable {
         case userToggles
         case productName, productType, categoryName, brand, confidence, visionContextRef
         case visionBestGuess, visionWebEntities
-        case analysis, model, promptVersion, appVersion
+        case analysis, model, promptVersion, productAnalysis, appVersion
         // Legacy key kept for decoding only
         case imageRef
     }
@@ -139,6 +144,7 @@ public struct ScanHistoryItem: Codable, Identifiable, Equatable {
         self.analysis = try c.decode(SafetyAnalysisResponse.self, forKey: .analysis)
         self.model = try c.decode(String.self, forKey: .model)
         self.promptVersion = try c.decode(String.self, forKey: .promptVersion)
+        self.productAnalysis = try c.decodeIfPresent(ProductAnalysis.self, forKey: .productAnalysis)
         self.appVersion = try c.decode(String.self, forKey: .appVersion)
     }
 
@@ -163,6 +169,7 @@ public struct ScanHistoryItem: Codable, Identifiable, Equatable {
         try c.encode(analysis, forKey: .analysis)
         try c.encode(model, forKey: .model)
         try c.encode(promptVersion, forKey: .promptVersion)
+        try c.encodeIfPresent(productAnalysis, forKey: .productAnalysis)
         try c.encode(appVersion, forKey: .appVersion)
     }
 }

@@ -68,6 +68,7 @@ final class ScanViewModelTests: XCTestCase {
             analysis: analysis,
             model: "archie-backend",
             promptVersion: "v1",
+            productAnalysis: nil,
             appVersion: "1.0"
         )
     }

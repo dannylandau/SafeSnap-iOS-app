@@ -34,6 +34,7 @@ final class ScanHistoryBuilderTests: XCTestCase {
             imageData: data,
             userToggles: toggles,
             visionContextRef: nil,
+            productAnalysis: nil,
             model: "gemini-test",
             promptVersion: "v-test"
         )

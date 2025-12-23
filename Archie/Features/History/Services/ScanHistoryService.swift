@@ -159,7 +159,7 @@ class ScanHistoryService: ObservableObject {
         return ScanHistoryItem(
             id: UUID(uuidString: apiItem.id) ?? UUID(),
             createdAt: ISO8601DateFormatter().date(from: apiItem.createdAt) ?? Date(),
-            schemaVersion: 2,
+            schemaVersion: 3,
             imageFilename: nil,  // Remote items don't have local files
             imageHash: apiItem.id,  // Use ID as hash for remote items
             userToggles: ScanHistoryItem.UserToggles(
@@ -178,6 +178,7 @@ class ScanHistoryService: ObservableObject {
             analysis: safetyResponse,
             model: "archie-backend",
             promptVersion: "v1-api",
+            productAnalysis: fullAnalysis,
             appVersion: Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.0"
         )
     }

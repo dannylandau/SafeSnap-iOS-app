@@ -62,6 +62,7 @@ final class ScanHistoryServiceTests: XCTestCase {
             analysis: analysis,
             model: "gemini-1.5-flash",
             promptVersion: "v1",
+            productAnalysis: nil,
             appVersion: "1.0"
         )
     }

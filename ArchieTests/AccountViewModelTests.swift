@@ -78,6 +78,7 @@ final class AccountViewModelTests: XCTestCase {
             analysis: analysis,
             model: "test-model",
             promptVersion: "test-prompt",
+            productAnalysis: nil,
             appVersion: "1.0-test"
         )
     }
