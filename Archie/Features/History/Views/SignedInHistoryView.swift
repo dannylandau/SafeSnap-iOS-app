@@ -110,7 +110,7 @@ struct SignedInHistoryView: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(
             RoundedRectangle(cornerRadius: 32, style: .continuous)
-                .fill(Color.white)
+                .fill(Color.secondarySystemBackground)
                 .shadow(color: Color.black.opacity(0.08), radius: 30, x: 0, y: 20)
         )
     }

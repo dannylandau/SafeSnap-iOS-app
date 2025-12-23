@@ -71,7 +71,8 @@ final class ShareService: ObservableObject {
         }
         
         // Format: "Archie result for {name}: {score}/10"
-        let score = analysis.safetyScore.overall
+        // Convert from 0-100 scale to 0-10 scale (rounded)
+        let score = (analysis.safetyScore.overall + 5) / 10
         let shareText = "Archie result for \(analysis.name): \(score)/\(Self.maxScore)"
         
         return ShareResult(

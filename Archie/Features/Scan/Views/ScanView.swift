@@ -56,8 +56,6 @@ struct ScanView: View {
 
     var body: some View {
         ZStack {
-//            Color(uiColor: .systemGray6).ignoresSafeArea()
-
             Group {
                 switch cameraState {
                 case .hidden:
@@ -189,8 +187,6 @@ struct ScanView: View {
                 .ignoresSafeArea()
 
             ScanOverlayView(mode: cameraState == .analyzing ? .scanning : .framing, availableSize: size)
-//                .padding(.horizontal, 32)
-//                .padding(.top, 48)
         }
     }
 
@@ -199,7 +195,7 @@ struct ScanView: View {
             Button(action: closeCamera) {
                 Image(systemName: "xmark")
                     .font(.system(size: 15, weight: .semibold))
-                    .foregroundColor(.primary)
+                    .foregroundColor(.secondarySystemBackground)
                     .padding(10)
                     .background(Color.white.opacity(0.9))
                     .clipShape(Circle())
