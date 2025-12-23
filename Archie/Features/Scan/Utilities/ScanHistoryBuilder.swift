@@ -19,6 +19,7 @@ enum ScanHistoryBuilder {
         imageData: Data,
         userToggles: ScanHistoryItem.UserToggles,
         visionContextRef: URL?,
+        productAnalysis: ProductAnalysis?,
         model: String = "gpt-4o",
         promptVersion: String = "v1",
         appVersion: String = (Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String) ?? "1.0"
@@ -39,6 +40,7 @@ enum ScanHistoryBuilder {
             analysis: analysis,
             model: model,
             promptVersion: promptVersion,
+            productAnalysis: productAnalysis,
             appVersion: appVersion
         )
     }

@@ -233,6 +233,8 @@ extension RecognitionResultViewModel {
 
 // MARK: — Convenience initializers & helpers
 extension RecognitionResultViewModel {
+    /// Create from a history item. Uses the item's stored productAnalysis by default,
+    /// but allows overriding if a fresher one is available.
     convenience init(
         image: UIImage?,
         from item: ScanHistoryItem,
@@ -251,7 +253,7 @@ extension RecognitionResultViewModel {
             scanDurationDescription: scanDurationDescription,
             visionBestGuess: item.visionBestGuess,
             visionWebEntities: item.visionWebEntities,
-            productAnalysis: productAnalysis
+            productAnalysis: productAnalysis ?? item.productAnalysis
         )
     }
 
