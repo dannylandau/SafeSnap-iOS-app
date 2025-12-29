@@ -8,6 +8,7 @@
 import SwiftUI
 
 struct ScanBottomControlsView: View {
+    let onHome: () -> Void
     let onCapture: () -> Void
     let onGallery: () -> Void
     var isCaptureDisabled: Bool = false
@@ -30,27 +31,30 @@ struct ScanBottomControlsView: View {
                     .padding(.top, -100)
 
                 HStack {
-                    Image("home")
-                        .font(.title3)
-                        .frame(width: 48, height: 48)
-                        .background(
-                            RoundedRectangle(cornerRadius: 16, style: .continuous)
-                                .fill(Color(.secondarySystemBackground))
-                                .shadow(color: Color.black.opacity(0.05), radius: 6, y: 2)
-                        )
+                    Button(action: onHome){
+                        Image("home")
+                            .renderingMode(.template)
+                            .tint(Color.primary.opacity(0.7))
+                            .frame(width: 48, height: 48)
+                            .background(
+                                RoundedRectangle(cornerRadius: 16, style: .continuous)
+                                    .fill(Color(.secondarySystemBackground))
+                                    .shadow(color: Color.black.opacity(0.05), radius: 6, y: 2)
+                            )
+                    }
 
                     Spacer()
 
                     Button(action: onCapture) {
                         ZStack {
                             Circle()
-                                .fill(Color.primary)
+                                .fill(Color.systemBackground)
                                 .frame(width: cameraDiameter, height: cameraDiameter)
                             Circle()
-                                .strokeBorder(Color.black.opacity(0.6), lineWidth: 6)
+                                .strokeBorder(Color.primary.opacity(0.7), lineWidth: 6)
                                 .frame(width: cameraDiameter - 6, height: cameraDiameter - 6)
                             Circle()
-                                .fill(Color(.black.opacity(0.25)))
+                                .fill(Color.secondary.opacity(0.6))
                                 .frame(width: cameraDiameter - 26, height: cameraDiameter - 26)
                             
                         }
@@ -63,7 +67,8 @@ struct ScanBottomControlsView: View {
 
                     Button(action: onGallery) {
                         Image("image")
-                            .font(.title3)
+                            .renderingMode(.template)
+                            .tint(Color.primary.opacity(0.7))
                             .frame(width: 48, height: 48)
                             .background(
                                 RoundedRectangle(cornerRadius: 16, style: .continuous)
@@ -87,7 +92,7 @@ struct ScanBottomControlsView: View {
 #if DEBUG
 struct ScanBottomControlsView_Previews: PreviewProvider {
     static var previews: some View {
-        ScanBottomControlsView(onCapture: {}, onGallery: {})
+        ScanBottomControlsView(onHome: {}, onCapture: {}, onGallery: {})
             .background(.clear)
     }
 }

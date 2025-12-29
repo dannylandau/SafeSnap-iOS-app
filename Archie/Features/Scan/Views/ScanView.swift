@@ -132,6 +132,7 @@ struct ScanView: View {
             }
 
             ScanBottomControlsView(
+                onHome: handleHomeTap,
                 onCapture: handleCaptureTap,
                 onGallery: handleGalleryTap
             )
@@ -161,6 +162,7 @@ struct ScanView: View {
                     }
 
                     ScanBottomControlsView(
+                        onHome: handleHomeTap,
                         onCapture: handleCaptureTap,
                         onGallery: handleGalleryTap,
                         isCaptureDisabled: cameraState == .analyzing,
@@ -210,6 +212,10 @@ struct ScanView: View {
             Spacer()
             Spacer().frame(width: 36)
         }
+    }
+    
+    private func handleHomeTap() {
+        //no-op
     }
 
     private func handleCaptureTap() {
