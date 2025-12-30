@@ -36,6 +36,10 @@ final class RecognitionResultViewModel: ObservableObject, Identifiable {
     // Backend-returned analysis with human-readable ID for sharing
     let productAnalysis: ProductAnalysis?
     
+    /// When true, show "Vibe Check" UI with playful labels instead of safety warnings.
+    /// Applies to non-safety items like rugs, curtains, selfies, pets, etc.
+    var isHumorMode: Bool { productAnalysis?.isHumorMode ?? false }
+    
     // Persisted image (filename-only for durability across reinstalls)
     let imageFilename: String?
     var imageRef: URL? {

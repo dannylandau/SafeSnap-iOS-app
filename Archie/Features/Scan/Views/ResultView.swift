@@ -82,6 +82,7 @@ struct ResultView: View {
     private var content: some View {
         VStack(spacing: 24) {
             shareButton()
+            vibeCheckBanner()
             imageCard()
             headerBar()
 //            scoresRow()
@@ -184,6 +185,32 @@ struct ResultView: View {
         let hasWebEntities = !vm.visionWebEntities.isEmpty
         return hasCategory || hasRules || hasLabels || hasOCR || hasBestGuess || hasWebEntities
     }
+    
+    // MARK: — Vibe Check Banner
+    @ViewBuilder
+    private func vibeCheckBanner() -> some View {
+        if vm.isHumorMode {
+            HStack(spacing: 8) {
+                Image(systemName: "sparkles")
+                    .font(.subheadline)
+                Text("Vibe Check Mode: Just for fun! Not a safety analysis.")
+                    .font(.subheadline)
+            }
+            .foregroundColor(.white)
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 12)
+            .padding(.horizontal, 16)
+            .background(
+                LinearGradient(
+                    colors: [Color.purple, Color.blue.opacity(0.8)],
+                    startPoint: .leading,
+                    endPoint: .trailing
+                )
+            )
+            .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+            .padding(.horizontal)
+        }
+    }
 
     // MARK: — Image Card
     private func imageCard() -> some View {
@@ -277,23 +304,28 @@ struct ResultView: View {
         let showDog = vm.includeDogs
         let showCat = vm.includeCats
         let hasMultiple = showDog || showCat
+        
+        // Use fun labels in humor mode
+        let kidLabel = vm.isHumorMode ? "Tiny Boss" : "Kids"
+        let dogLabel = vm.isHumorMode ? "Good Boi" : "Dogs"
+        let catLabel = vm.isHumorMode ? "Furry Overlord" : "Cats"
 
         typealias SectionType = RecognitionResultViewModel.FocusSection
-        var items: [(String, Int, ScoreRing.LabelPlacement, SectionType)] = [("Kids", child10, .below, .children)]
-        if showDog { items.append(("Dogs", dog10 ?? 0, .below, .dogs)) }
-        if showCat { items.append(("Cats", cat10 ?? 0, .below, .cats)) }
+        var items: [(String, Int, ScoreRing.LabelPlacement, SectionType)] = [(kidLabel, child10, .below, .children)]
+        if showDog { items.append((dogLabel, dog10 ?? 0, .below, .dogs)) }
+        if showCat { items.append((catLabel, cat10 ?? 0, .below, .cats)) }
         if items.count == 2 { items = items.map { ($0.0, $0.1, .beside, $0.3) } }
 
         return VStack(spacing: 20) {
             if vm.includeDogs || vm.includeCats {
-                Text("Tip: tap a score ring to focus and jump to that section")
+                Text(vm.isHumorMode ? "Tip: tap a vibe ring to focus on that section" : "Tip: tap a score ring to focus and jump to that section")
                     .font(.caption2)
                     .foregroundColor(.secondary)
                     .padding(.top, 2)
             }
             HStack(spacing: 0) {
                 ForEach(Array(items.enumerated()), id: \.offset) { _, item in
-                    ScoreRing(title: item.0, score10: item.1, labelPlacement: item.2,
+                    ScoreRing(title: item.0, score10: item.1, labelPlacement: item.2, isHumorMode: vm.isHumorMode,
                               onTap: hasMultiple ? { vm.selectedSection = item.3 } : nil)
                     .frame(maxWidth: .infinity, alignment: .center)
                 }
@@ -326,13 +358,14 @@ struct ResultView: View {
         let child10 = vm.analysis.childSafetyScore
         let narrative = vm.kidNarrative
         return SafetySectionView(
-            title: "Kid Safety",
+            title: vm.isHumorMode ? "Tiny Boss" : "Kid Safety",
             iconName: "kid_safety",
             score10: child10,
             bulletsGood: vm.safeBenefits,
             bulletsRisk: vm.safetyConcerns,
             paragraph: narrative,
-            isCollapsed: $kidsCollapsed
+            isCollapsed: $kidsCollapsed,
+            isHumorMode: vm.isHumorMode
         )
         .padding(.horizontal)
     }
@@ -344,13 +377,14 @@ struct ResultView: View {
         let risks = vm.dogConcerns
         let narrative = vm.dogNarrative
         return SafetySectionView(
-            title: "Dog Safety",
+            title: vm.isHumorMode ? "Good Boi" : "Dog Safety",
             iconName: "dog_safety",
             score10: dog10,
             bulletsGood: pros,
             bulletsRisk: risks,
             paragraph: narrative,
-            isCollapsed: $dogsCollapsed
+            isCollapsed: $dogsCollapsed,
+            isHumorMode: vm.isHumorMode
         )
         .padding(.horizontal)
     }
@@ -362,13 +396,14 @@ struct ResultView: View {
         let risks = vm.catConcerns
         let narrative = vm.catNarrative
         return SafetySectionView(
-            title: "Cat Safety",
+            title: vm.isHumorMode ? "Furry Overlord" : "Cat Safety",
             iconName: "cat_safety",
             score10: cat10,
             bulletsGood: pros,
             bulletsRisk: risks,
             paragraph: narrative,
-            isCollapsed: $catsCollapsed
+            isCollapsed: $catsCollapsed,
+            isHumorMode: vm.isHumorMode
         )
         .padding(.horizontal)
     }
@@ -665,16 +700,28 @@ private struct SafetySectionView: View {
     let bulletsRisk: [String]
     let paragraph: String?
     @Binding var isCollapsed: Bool
+    var isHumorMode: Bool = false
 
-    private var tint: Color { scoreColor(score10) }
+    private var tint: Color {
+        isHumorMode ? .purple : scoreColor(score10)
+    }
+    
+    private var scoreLabel: String {
+        isHumorMode ? "Vibe Check" : "Safety score"
+    }
 
     var body: some View {
         VStack(spacing: 10) {
             // Header bar
             HStack(spacing: 10) {
-                Image(iconName)
-                    .renderingMode(.template)
-                    .foregroundStyle(.white)
+                if isHumorMode {
+                    Image(systemName: "sparkles")
+                        .foregroundStyle(.white)
+                } else {
+                    Image(iconName)
+                        .renderingMode(.template)
+                        .foregroundStyle(.white)
+                }
                 Text(title).font(.headline)
                 Spacer()
                 Image(systemName: isCollapsed ? "plus" : "minus")
@@ -686,14 +733,14 @@ private struct SafetySectionView: View {
             }
             .padding(.horizontal)
             .frame(width: .infinity, height: 55)
-            .background(tint)
+            .background(isHumorMode ? LinearGradient(colors: [.purple, .blue.opacity(0.8)], startPoint: .leading, endPoint: .trailing) : LinearGradient(colors: [tint], startPoint: .leading, endPoint: .trailing))
             .foregroundStyle(.white)
             .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
 
             if !isCollapsed {
                 VStack(alignment: .leading, spacing: 12) {
                     HStack {
-                        ScoreRing(title: "Safety score", score10: score10, labelPlacement: .beside, onTap: nil)
+                        ScoreRing(title: scoreLabel, score10: score10, labelPlacement: .beside, isHumorMode: isHumorMode, onTap: nil)
                             .padding(.leading, 10)
                         Spacer()
                     }
@@ -704,9 +751,10 @@ private struct SafetySectionView: View {
                         VStack(alignment: .leading, spacing: 8) {
                             ForEach(bulletsGood, id: \.self) { t in
                                 HStack(alignment: .top, spacing: 8) {
-                                    Image(systemName: "triangle.fill").rotationEffect(.degrees(90))
+                                    Image(systemName: isHumorMode ? "star.fill" : "triangle.fill")
+                                        .rotationEffect(isHumorMode ? .degrees(0) : .degrees(90))
                                         .font(.caption)
-                                        .foregroundStyle(Color.green)
+                                        .foregroundStyle(isHumorMode ? Color.purple : Color.green)
                                     Text(t).font(.subheadline).bold()
                                 }
                             }
@@ -719,9 +767,9 @@ private struct SafetySectionView: View {
                         VStack(alignment: .leading, spacing: 8) {
                             ForEach(bulletsRisk, id: \.self) { t in
                                 HStack(alignment: .top, spacing: 8) {
-                                    Image(systemName: "triangle.fill")
+                                    Image(systemName: isHumorMode ? "hand.thumbsdown.fill" : "triangle.fill")
                                         .font(.caption)
-                                        .foregroundStyle(Color.red)
+                                        .foregroundStyle(isHumorMode ? Color.orange : Color.red)
                                     Text(t).font(.subheadline)
                                 }
                             }
@@ -753,9 +801,10 @@ private struct SafetySectionView: View {
 struct ScoreRing: View {
     enum LabelPlacement { case below, beside }
 
-    let title: String               // e.g. "Safety Score"
+    let title: String               // e.g. "Safety Score" or "Vibe Check"
     let score10: Int               // 0–10
     let labelPlacement: LabelPlacement
+    var isHumorMode: Bool = false
     let onTap: (() -> Void)?
 
     // Styling knobs
@@ -763,7 +812,7 @@ struct ScoreRing: View {
     var thickness: CGFloat = 12
 
     private var progress: Double { min(1.0, max(0.0, Double(score10) / 10.0)) }
-    private var tint: Color { scoreColor(score10) }
+    private var tint: Color { isHumorMode ? .purple : scoreColor(score10) }
 
     var body: some View {
         Group {

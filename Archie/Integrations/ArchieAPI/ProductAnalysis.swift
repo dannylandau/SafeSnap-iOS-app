@@ -15,14 +15,21 @@ import Foundation
 public struct ProductAnalysis: Codable, Equatable, Identifiable {
     public let id: String
     public let name: String
-    public let image: String  // Base64 image (empty for shared)
-    public let imageUrl: String?  // Firebase Storage URL
+    public let image: String  // Base64 image or URL from backend
+    public let imageUrl: String?  // Firebase Storage URL (legacy)
     public let safetyScore: SafetyScore
     public let category: String
     public let recognitionStatus: RecognitionStatus?
     public let analysis: SafetyAnalysis
     public let petSafetyOptions: PetSafetyOptions?
     public let analysisMetadata: AnalysisMetadata?
+    
+    /// When true, this is a "Vibe Check" (humor mode) analysis for non-safety items
+    /// like rugs, curtains, selfies, pets, etc. UI should show playful labels instead of safety warnings.
+    /// Derived from analysisMetadata.isHumorMode
+    public var isHumorMode: Bool {
+        analysisMetadata?.isHumorMode ?? false
+    }
     
     public init(
         id: String,
@@ -174,6 +181,7 @@ public enum SafetyStatus: String, Codable, Equatable {
     case safe
     case warning
     case danger
+    case info  // Used when analysis was not performed (e.g., pet safety skipped)
 }
 
 // MARK: - Severity Level
@@ -277,6 +285,11 @@ public struct AnalysisMetadata: Codable, Equatable {
     public let catSafetyScore: Int?
     public let modelConfidence: Double?
     public let recognitionConfidence: Double?
+    public let subjectType: String?
+    
+    /// When true, this is a "Vibe Check" (humor mode) analysis for non-safety items
+    /// like rugs, curtains, selfies, pets, etc.
+    public let isHumorMode: Bool?
     
     public init(
         scanDuration: Double? = nil,
@@ -286,7 +299,9 @@ public struct AnalysisMetadata: Codable, Equatable {
         dogSafetyScore: Int? = nil,
         catSafetyScore: Int? = nil,
         modelConfidence: Double? = nil,
-        recognitionConfidence: Double? = nil
+        recognitionConfidence: Double? = nil,
+        subjectType: String? = nil,
+        isHumorMode: Bool? = nil
     ) {
         self.scanDuration = scanDuration
         self.canonicalCategory = canonicalCategory
@@ -296,6 +311,8 @@ public struct AnalysisMetadata: Codable, Equatable {
         self.catSafetyScore = catSafetyScore
         self.modelConfidence = modelConfidence
         self.recognitionConfidence = recognitionConfidence
+        self.subjectType = subjectType
+        self.isHumorMode = isHumorMode
     }
 }
 
