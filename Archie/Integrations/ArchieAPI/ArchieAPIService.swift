@@ -44,7 +44,7 @@ enum ArchieAPIError: LocalizedError {
         case .encodingFailed:
             return "Failed to encode request data"
         case .decodingFailed(let error):
-            return "Failed to decode response: \(error.localizedDescription)"
+            return "Failed to decode response: \(Self.detailedDecodingError(error))"
         case .httpError(let code, let message):
             return "HTTP Error \(code): \(message ?? "Unknown error")"
         case .unauthorized:
@@ -58,6 +58,44 @@ enum ArchieAPIError: LocalizedError {
         case .noData:
             return "No data received from server"
         }
+    }
+    
+    /// Extracts detailed information from a DecodingError
+    private static func detailedDecodingError(_ error: Error) -> String {
+        guard let decodingError = error as? DecodingError else {
+            return error.localizedDescription
+        }
+        
+        switch decodingError {
+        case .keyNotFound(let key, let context):
+            let path = codingPathString(context.codingPath)
+            return "Missing key '\(key.stringValue)' at path: \(path.isEmpty ? "root" : path). \(context.debugDescription)"
+            
+        case .typeMismatch(let type, let context):
+            let path = codingPathString(context.codingPath)
+            return "Type mismatch for '\(type)' at path: \(path.isEmpty ? "root" : path). \(context.debugDescription)"
+            
+        case .valueNotFound(let type, let context):
+            let path = codingPathString(context.codingPath)
+            return "Missing value of type '\(type)' at path: \(path.isEmpty ? "root" : path). \(context.debugDescription)"
+            
+        case .dataCorrupted(let context):
+            let path = codingPathString(context.codingPath)
+            return "Data corrupted at path: \(path.isEmpty ? "root" : path). \(context.debugDescription)"
+            
+        @unknown default:
+            return decodingError.localizedDescription
+        }
+    }
+    
+    /// Converts a coding path to a readable string like "analysisMetadata.isHumorMode"
+    private static func codingPathString(_ path: [CodingKey]) -> String {
+        path.map { key in
+            if let intValue = key.intValue {
+                return "[\(intValue)]"
+            }
+            return key.stringValue
+        }.joined(separator: ".")
     }
 }
 
@@ -167,11 +205,33 @@ final class ArchieAPIService: ProductAnalyzing {
             
             switch httpResponse.statusCode {
             case 200..<300:
+                #if DEBUG
+                if endpoint == "/api/analyze" {
+                    if let jsonString = String(data: data, encoding: .utf8) {
+                        print("📦 [ArchieAPI] /api/analyze response body:")
+                        print(jsonString)
+                    }
+                }
+                #endif
+                
                 do {
                     let decoder = JSONDecoder()
                     decoder.dateDecodingStrategy = .iso8601
                     return try decoder.decode(T.self, from: data)
                 } catch {
+                    #if DEBUG
+                    print("❌ [ArchieAPI] Decoding error for \(endpoint)")
+                    print("   Target type: \(T.self)")
+                    if let decodingError = error as? DecodingError {
+                        print("   \(Self.formatDecodingError(decodingError))")
+                    } else {
+                        print("   Error: \(error)")
+                    }
+                    if let jsonString = String(data: data, encoding: .utf8) {
+                        print("📦 [ArchieAPI] Raw response that failed to decode:")
+                        print(jsonString)
+                    }
+                    #endif
                     throw ArchieAPIError.decodingFailed(underlying: error)
                 }
             case 401:
@@ -194,6 +254,30 @@ final class ArchieAPIService: ProductAnalyzing {
             return json["message"] as? String ?? json["error"] as? String
         }
         return String(data: data, encoding: .utf8)
+    }
+    
+    /// Formats a DecodingError for debug logging
+    private static func formatDecodingError(_ error: DecodingError) -> String {
+        switch error {
+        case .keyNotFound(let key, let context):
+            let path = context.codingPath.map { $0.stringValue }.joined(separator: ".")
+            return "Missing key '\(key.stringValue)' at path: \(path.isEmpty ? "root" : path)"
+            
+        case .typeMismatch(let type, let context):
+            let path = context.codingPath.map { $0.stringValue }.joined(separator: ".")
+            return "Type mismatch: expected '\(type)' at path: \(path.isEmpty ? "root" : path). \(context.debugDescription)"
+            
+        case .valueNotFound(let type, let context):
+            let path = context.codingPath.map { $0.stringValue }.joined(separator: ".")
+            return "Missing value of type '\(type)' at path: \(path.isEmpty ? "root" : path)"
+            
+        case .dataCorrupted(let context):
+            let path = context.codingPath.map { $0.stringValue }.joined(separator: ".")
+            return "Data corrupted at path: \(path.isEmpty ? "root" : path). \(context.debugDescription)"
+            
+        @unknown default:
+            return error.localizedDescription
+        }
     }
     
     // MARK: - Authentication API

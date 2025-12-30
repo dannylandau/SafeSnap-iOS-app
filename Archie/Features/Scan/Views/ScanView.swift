@@ -197,7 +197,7 @@ struct ScanView: View {
             Button(action: closeCamera) {
                 Image(systemName: "xmark")
                     .font(.system(size: 15, weight: .semibold))
-                    .foregroundColor(.secondarySystemBackground)
+                    .foregroundColor(.secondary)
                     .padding(10)
                     .background(Color.white.opacity(0.9))
                     .clipShape(Circle())
