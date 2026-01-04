@@ -6,7 +6,10 @@
 //
 
 import SwiftUI
+import Photos
 import PhotosUI
+import AVFoundation
+import UIKit
 
 enum ScanPhase: Equatable {
     case idle
@@ -31,6 +34,7 @@ struct ScanView: View {
     @StateObject private var cameraViewModel: CameraViewModel
     @AppStorage("includeDogSafety") private var includeDog = false
     @AppStorage("includeCatSafety") private var includeCat = false
+    @AppStorage("didShowLimitedPhotosAlert") private var didShowLimitedPhotosAlert = false
     @State private var selectedPhoto: PhotosPickerItem?
     @State private var isPhotoPickerPresented = false
     @State private var cameraState: CameraState = .hidden
@@ -43,7 +47,7 @@ struct ScanView: View {
     init(
         viewModel: ScanViewModel,
         userSession: UserSession,
-        cameraViewModel: @autoclosure @escaping () -> CameraViewModel = CameraViewModel(),
+        cameraViewModel: @autoclosure @escaping () -> CameraViewModel = CameraViewModel(startSession: false),
         onShowHistory: @escaping () -> Void,
         onShowAccount: @escaping () -> Void
     ) {
@@ -221,9 +225,7 @@ struct ScanView: View {
     private func handleCaptureTap() {
         switch cameraState {
         case .hidden:
-            withAnimation(.spring(response: 0.45, dampingFraction: 0.85)) {
-                cameraState = .live
-            }
+            requestCameraAccessIfNeeded()
         case .live:
             cameraViewModel.capturePhoto()
         case .analyzing:
@@ -233,7 +235,7 @@ struct ScanView: View {
 
     private func handleGalleryTap() {
         guard cameraState == .hidden else { return }
-        isPhotoPickerPresented = true
+        requestPhotoAccessIfNeeded()
     }
 
     private func presentAnalyzingState(with image: UIImage) {
@@ -255,6 +257,108 @@ struct ScanView: View {
             cameraState = .hidden
         }
         frozenFrame = nil
+    }
+
+    private func requestCameraAccessIfNeeded() {
+        switch AVCaptureDevice.authorizationStatus(for: .video) {
+        case .authorized:
+            startCamera()
+        case .notDetermined:
+            AVCaptureDevice.requestAccess(for: .video) { granted in
+                DispatchQueue.main.async {
+                    granted ? startCamera() : showCameraDeniedAlert()
+                }
+            }
+        case .denied, .restricted:
+            showCameraDeniedAlert()
+        @unknown default:
+            showCameraDeniedAlert()
+        }
+    }
+
+    private func startCamera() {
+        cameraViewModel.setupSession()
+        withAnimation(.spring(response: 0.45, dampingFraction: 0.85)) {
+            cameraState = .live
+        }
+    }
+
+    private func showCameraDeniedAlert() {
+        viewModel.alerts.show(
+            AppAlert(
+                title: "Camera Access Needed",
+                message: "Enable camera access in Settings to scan products.",
+                actions: [
+                    .init(title: "Open Settings", role: .normal, perform: openAppSettings),
+                    .init(title: "Cancel", role: .cancel)
+                ]
+            )
+        )
+    }
+
+    private func openAppSettings() {
+        guard let url = URL(string: UIApplication.openSettingsURLString) else { return }
+        UIApplication.shared.open(url)
+    }
+
+    private func requestPhotoAccessIfNeeded() {
+        handlePhotoAuthorizationStatus(PHPhotoLibrary.authorizationStatus(for: .readWrite))
+    }
+
+    private func handlePhotoAuthorizationStatus(_ status: PHAuthorizationStatus) {
+        switch status {
+        case .authorized:
+            isPhotoPickerPresented = true
+        case .limited:
+            if didShowLimitedPhotosAlert {
+                isPhotoPickerPresented = true
+            } else {
+                didShowLimitedPhotosAlert = true
+                showLimitedPhotosAlert()
+            }
+        case .notDetermined:
+            PHPhotoLibrary.requestAuthorization(for: .readWrite) { newStatus in
+                DispatchQueue.main.async {
+                    handlePhotoAuthorizationStatus(newStatus)
+                }
+            }
+        case .denied, .restricted:
+            showPhotosDeniedAlert()
+        @unknown default:
+            showPhotosDeniedAlert()
+        }
+    }
+
+    private func showLimitedPhotosAlert() {
+        viewModel.alerts.show(
+            AppAlert(
+                title: "Limited Photos Access",
+                message: "You can choose from the photos already shared with Archie, or add more.",
+                actions: [
+                    .init(title: "Choose Photos", role: .normal, perform: { isPhotoPickerPresented = true }),
+                    .init(title: "Manage Photos", role: .normal, perform: presentLimitedLibraryPicker),
+                    .init(title: "Cancel", role: .cancel)
+                ]
+            )
+        )
+    }
+
+    private func showPhotosDeniedAlert() {
+        viewModel.alerts.show(
+            AppAlert(
+                title: "Photos Access Needed",
+                message: "Enable photo access in Settings to pick a product image.",
+                actions: [
+                    .init(title: "Open Settings", role: .normal, perform: openAppSettings),
+                    .init(title: "Cancel", role: .cancel)
+                ]
+            )
+        )
+    }
+
+    private func presentLimitedLibraryPicker() {
+        guard let presenter = UIApplication.safesnapKeyWindow?.rootViewController?.topMostViewController else { return }
+        PHPhotoLibrary.shared().presentLimitedLibraryPicker(from: presenter)
     }
 
     private enum CameraState {
