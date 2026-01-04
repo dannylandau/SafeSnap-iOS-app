@@ -27,7 +27,7 @@ struct HelpView: View {
                             Text("Food, toys, cosmetics, electronics, household items, and more.")
 
                             Text("**Is my data secure?**")
-                            Text("All data is encrypted and stored locally on your device.")
+                            Text("Scans are sent to our servers to generate safety results. Your history is stored on your device, and if you sign in we also sync history and scan images so they’re available across devices.")
                         }
                         .font(.subheadline)
                     }
