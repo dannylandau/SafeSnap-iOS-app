@@ -57,7 +57,7 @@ final class ShareServiceTests: XCTestCase {
         
         let result = try sut.generateShareContent(for: analysis)
         
-        XCTAssertEqual(result.shareText, "Archie result for Organic Banana: 72/10")
+        XCTAssertEqual(result.shareText, "Archie result for Organic Banana: 7/10")
     }
     
     func test_generateShareContent_includesAnalysisId() throws {

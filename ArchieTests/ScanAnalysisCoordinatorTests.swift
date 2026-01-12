@@ -198,6 +198,10 @@ final class ScanAnalysisCoordinatorTests: XCTestCase {
 // MARK: - Test Doubles
 
 private final class MockAPIService: ProductAnalyzing {
+    func saveToHistory(item: Archie.APIHistoryItem) async throws -> Archie.HistorySaveResponse {
+        return Archie.HistorySaveResponse(success: true, message: "success")
+    }
+    
     var analyzeCallCount = 0
     var capturedOptions: (includeDogs: Bool, includeCats: Bool, includeChildren: Bool)?
     var stubAnalysis: ProductAnalysis?

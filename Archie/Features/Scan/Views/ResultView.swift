@@ -16,6 +16,7 @@ struct ResultView: View {
     @State private var catsCollapsed: Bool = true
     @State private var isSharing: Bool = false
     @State private var shareError: String?
+    @State private var isBackendResponsePresented: Bool = false
 
     struct SharePayload: Identifiable { let id = UUID(); let items: [Any] }
 
@@ -48,6 +49,9 @@ struct ResultView: View {
         }
         .sheet(item: $sharePayload) { payload in
             ShareSheet(activityItems: payload.items)
+        }
+        .sheet(isPresented: $isBackendResponsePresented) {
+            BackendResponseView(text: backendResponseText)
         }
         .fullScreenCover(isPresented: $isZoomPresented) {
             ZStack {
@@ -111,6 +115,16 @@ struct ResultView: View {
         HStack {
             Spacer()
             Button {
+                isBackendResponsePresented = true
+            } label: {
+                Text("Response")
+                    .font(.headline)
+            }
+            .buttonStyle(.bordered)
+            .controlSize(.regular)
+            .disabled(backendResponseText == nil)
+            .accessibilityLabel("Show backend response")
+            Button {
                 Task { await prepareShareWithURL() }
             } label: {
                 HStack(spacing: 6) {
@@ -138,6 +152,10 @@ struct ResultView: View {
                 Text(error)
             }
         }
+    }
+
+    private var backendResponseText: String? {
+        vm.productAnalysis?.prettyPrintedJSON()
     }
 
     // Resolves a stored file URL into the **current** app container if needed
@@ -607,6 +625,30 @@ struct ShareSheet: UIViewControllerRepresentable {
       _ uiController: UIActivityViewController,
       context: Context
     ) {}
+}
+
+private struct BackendResponseView: View {
+    @Environment(\.dismiss) private var dismiss
+    let text: String?
+
+    var body: some View {
+        NavigationStack {
+            ScrollView([.vertical, .horizontal]) {
+                Text(text ?? "No backend response available.")
+                    .font(.system(.footnote, design: .monospaced))
+                    .foregroundStyle(.primary)
+                    .textSelection(.enabled)
+                    .padding()
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            }
+            .navigationTitle("Backend Response")
+            .toolbar {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button("Done") { dismiss() }
+                }
+            }
+        }
+    }
 }
 
 // MARK: - File-scoped helpers (usable by nested views)
