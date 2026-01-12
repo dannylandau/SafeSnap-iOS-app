@@ -38,7 +38,17 @@ final class RecognitionResultViewModel: ObservableObject, Identifiable {
     
     /// When true, show "Vibe Check" UI with playful labels instead of safety warnings.
     /// Applies to non-safety items like rugs, curtains, selfies, pets, etc.
-    var isHumorMode: Bool { productAnalysis?.isHumorMode ?? false }
+    ///
+    /// **Safety Override**: If the overall score is ≤ 4, we force Serious Mode
+    /// regardless of what the backend says. This prevents dangerous items
+    /// (cars, toxic substances, etc.) from ever showing "fun" UI.
+    var isHumorMode: Bool {
+        guard let analysis = productAnalysis else { return false }
+        let backendSaysHumor = analysis.isHumorMode
+        let safetyScore = analysis.safetyScore.overall
+        // Safety override: low scores always show serious UI
+        return backendSaysHumor && safetyScore > 4
+    }
     
     // Persisted image (filename-only for durability across reinstalls)
     let imageFilename: String?
@@ -62,7 +72,7 @@ final class RecognitionResultViewModel: ObservableObject, Identifiable {
     // User toggles
     let includeDogs: Bool
     let includeCats: Bool
-    let includeChildren: Bool = true
+    let includeChildren: Bool
 
     // Derived lists for UI
     var safeBenefits: [String] {
@@ -189,13 +199,18 @@ final class RecognitionResultViewModel: ObservableObject, Identifiable {
         visionWebEntities: [String] = [],
         productAnalysis: ProductAnalysis? = nil
     ) {
+        let resolvedIncludeDogs = productAnalysis?.petSafetyOptions?.includeDogs ?? includeDogs
+        let resolvedIncludeCats = productAnalysis?.petSafetyOptions?.includeCats ?? includeCats
+        let resolvedIncludeChildren = productAnalysis?.petSafetyOptions?.includeChildren ?? true
+
         self.image = image
         self.productName = productName
         self.category = category
         self.date = date
         self.analysis = analysis
-        self.includeDogs = includeDogs
-        self.includeCats = includeCats
+        self.includeDogs = resolvedIncludeDogs
+        self.includeCats = resolvedIncludeCats
+        self.includeChildren = resolvedIncludeChildren
         self.imageFilename = imageFilename
         self.scanDurationDescription = scanDurationDescription
         self.canonicalCategory = canonicalCategory
