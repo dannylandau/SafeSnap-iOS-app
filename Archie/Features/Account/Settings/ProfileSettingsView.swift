@@ -28,7 +28,7 @@ struct ProfileSettingsView: View {
                 VStack(alignment: .leading, spacing: 4) {
                         TextField("Email", text: .constant(userEmail))
                             .disabled(true)
-                            .foregroundColor(.gray)
+                            .foregroundColor(.secondary)
                     }
             }
 

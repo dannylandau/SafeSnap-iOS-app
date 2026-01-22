@@ -27,7 +27,7 @@ struct SignedInAccountView: View {
             }
             .padding(.bottom, 48)
         }
-        .background(Color(red: 0.93, green: 0.94, blue: 0.96).ignoresSafeArea())
+        .background(Color(.systemGroupedBackground).ignoresSafeArea())
         .navigationBarTitleDisplayMode(.inline)
         .toolbarBackground(.hidden, for: .navigationBar)
         .sheet(item: $sharePayload) { payload in
@@ -50,7 +50,7 @@ struct SignedInAccountView: View {
         }
         .padding(24)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(Color.white)
+        .background(Color(.secondarySystemGroupedBackground))
         .clipShape(RoundedRectangle(cornerRadius: 32, style: .continuous))
         .shadow(color: Color.black.opacity(0.08), radius: 24, y: 12)
     }
@@ -137,7 +137,7 @@ struct SignedInAccountView: View {
             }
         }
         .padding(12)
-        .background(Color(red: 0.95, green: 0.95, blue: 0.97))
+        .background(Color(.tertiarySystemGroupedBackground))
         .clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
     }
 
@@ -206,7 +206,7 @@ struct SignedInAccountView: View {
 
     private var dragIndicator: some View {
         Capsule()
-            .fill(Color.black.opacity(0.15))
+            .fill(Color(.tertiaryLabel))
             .frame(width: 44, height: 5)
             .accessibilityHidden(true)
     }
