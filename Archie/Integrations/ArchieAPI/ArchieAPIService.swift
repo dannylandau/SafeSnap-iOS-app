@@ -400,7 +400,8 @@ final class ArchieAPIService: ProductAnalyzing {
         includeCats: Bool = true,
         includeChildren: Bool = true
     ) async throws -> ProductAnalysis {
-        guard let imageData = image.jpegData(compressionQuality: 0.85) else {
+        let resizedImage = image.resizedToFit(maxPixelSize: 1024)
+        guard let imageData = resizedImage.jpegData(compressionQuality: 0.7) else {
             throw ArchieAPIError.imageEncodingFailed
         }
         

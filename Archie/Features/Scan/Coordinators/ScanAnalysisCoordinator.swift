@@ -399,23 +399,47 @@ final class ScanAnalysisCoordinator: ObservableObject {
         let kidSafety = analysis.analysis.kidSafety
         let petSafety = analysis.analysis.petSafety
         
+        func severityFromStatus(_ status: SafetyStatus?) -> Severity {
+            switch status {
+            case .danger: return .high
+            case .warning: return .medium
+            case .safe, .info, .none: return .low
+            }
+        }
+
         // Extract dog warnings
-        let dogWarnings: [SafetyAnalysisResponse.PetWarning] = petSafety.dogs?.details?.map { detail in
-            SafetyAnalysisResponse.PetWarning(
-                severity: Severity(rawValue: detail.severity.rawValue) ?? .medium,
-                warning: detail.warning,
-                reason: detail.reason
-            )
-        } ?? []
+        let dogWarnings: [SafetyAnalysisResponse.PetWarning] = {
+            var warnings = petSafety.dogs?.details?.map { detail in
+                SafetyAnalysisResponse.PetWarning(
+                    severity: Severity(rawValue: detail.severity.rawValue) ?? .medium,
+                    warning: detail.warning,
+                    reason: detail.reason
+                )
+            } ?? []
+            let statusSeverity = severityFromStatus(petSafety.dogs?.status)
+            let stringWarnings = petSafety.dogs?.warnings ?? []
+            warnings.append(contentsOf: stringWarnings.map {
+                SafetyAnalysisResponse.PetWarning(severity: statusSeverity, warning: $0, reason: "")
+            })
+            return warnings
+        }()
         
         // Extract cat warnings
-        let catWarnings: [SafetyAnalysisResponse.PetWarning] = petSafety.cats?.details?.map { detail in
-            SafetyAnalysisResponse.PetWarning(
-                severity: Severity(rawValue: detail.severity.rawValue) ?? .medium,
-                warning: detail.warning,
-                reason: detail.reason
-            )
-        } ?? []
+        let catWarnings: [SafetyAnalysisResponse.PetWarning] = {
+            var warnings = petSafety.cats?.details?.map { detail in
+                SafetyAnalysisResponse.PetWarning(
+                    severity: Severity(rawValue: detail.severity.rawValue) ?? .medium,
+                    warning: detail.warning,
+                    reason: detail.reason
+                )
+            } ?? []
+            let statusSeverity = severityFromStatus(petSafety.cats?.status)
+            let stringWarnings = petSafety.cats?.warnings ?? []
+            warnings.append(contentsOf: stringWarnings.map {
+                SafetyAnalysisResponse.PetWarning(severity: statusSeverity, warning: $0, reason: "")
+            })
+            return warnings
+        }()
         
         // Convert general safety
         let generalPros = analysis.analysis.generalSafety?.pros.map { point in

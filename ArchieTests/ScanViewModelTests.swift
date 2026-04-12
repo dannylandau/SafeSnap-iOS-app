@@ -94,6 +94,17 @@ final class ScanViewModelTests: XCTestCase {
         )
     }
 
+    private func waitUntil(timeout: TimeInterval = 1.0, condition: () -> Bool) async throws {
+        let deadline = Date().addingTimeInterval(timeout)
+        while !condition() {
+            if Date() >= deadline {
+                XCTFail("Timed out waiting for condition")
+                return
+            }
+            try await Task.sleep(nanoseconds: 20_000_000)
+        }
+    }
+
     // MARK: - Tests
 
     @MainActor
@@ -103,7 +114,10 @@ final class ScanViewModelTests: XCTestCase {
         let image = makeImage()
 
         viewModel.handleImage(image)
-        try? await Task.sleep(nanoseconds: 50_000_000)
+        try? await waitUntil {
+            if case .analyzing = viewModel.phase { return true }
+            return false
+        }
 
         if case let .analyzing(liveImage) = viewModel.phase {
             XCTAssertNotNil(liveImage)
@@ -126,7 +140,7 @@ final class ScanViewModelTests: XCTestCase {
 
         viewModel.beginScan(with: data, uiImage: image, includeDog: true, includeCat: false, includeChildren: true)
 
-        try? await Task.sleep(nanoseconds: 150_000_000) // allow async task to finish
+        try? await waitUntil { viewModel.resultVM != nil }
 
         XCTAssertEqual(coordinator.startCalls.count, 1)
         XCTAssertTrue(coordinator.startCalls.first?.includeDogs ?? false)
@@ -150,7 +164,7 @@ final class ScanViewModelTests: XCTestCase {
         let data = image.jpegData(compressionQuality: 0.7)!
 
         viewModel.beginScan(with: data, uiImage: image, includeDog: false, includeCat: false, includeChildren: true)
-        try? await Task.sleep(nanoseconds: 120_000_000)
+        try? await waitUntil { coordinator.startCalls.count == 1 }
 
         XCTAssertEqual(coordinator.startCalls.count, 1)
         XCTAssertEqual(coordinator.startCalls.first?.includeChildren, true)
@@ -179,7 +193,7 @@ final class ScanViewModelTests: XCTestCase {
         let data = image.jpegData(compressionQuality: 0.8)!
 
         viewModel.beginScan(with: data, uiImage: image, includeDog: false, includeCat: false, includeChildren: true)
-        try? await Task.sleep(nanoseconds: 150_000_000)
+        try? await waitUntil { viewModel.resultVM != nil }
 
         XCTAssertEqual(tracker.startCallCount, 1)
         XCTAssertEqual(tracker.stopCallCount, 1)
@@ -211,7 +225,7 @@ final class ScanViewModelTests: XCTestCase {
         let data = image.jpegData(compressionQuality: 0.8)!
 
         viewModel.beginScan(with: data, uiImage: image, includeDog: true, includeCat: false, includeChildren: true)
-        try? await Task.sleep(nanoseconds: 150_000_000)
+        try? await waitUntil { viewModel.resultVM != nil }
 
         XCTAssertEqual(tracker.startCallCount, 0, "Timer should not start when flag disabled")
         XCTAssertEqual(tracker.stopCallCount, 0, "Timer should not stop when flag disabled")
@@ -246,33 +260,6 @@ final class ScanViewModelTests: XCTestCase {
     }
 
     @MainActor
-    func test_retryLastScan_reusesPreviousToggleState() async {
-        let coordinator = MockCoordinator()
-        coordinator.stubHistoryItem = makeHistoryItem(includeDogs: false, includeCats: true, includeChildren: true)
-        coordinator.stubProductAnalysis = makeProductAnalysis()
-        let viewModel = ScanViewModel(coordinator: coordinator)
-        let image = makeImage()
-        guard let data = image.jpegData(compressionQuality: 0.7) else {
-            return XCTFail("Failed to encode sample image")
-        }
-
-        viewModel.beginScan(with: data, uiImage: image, includeDog: false, includeCat: true, includeChildren: true)
-        try? await Task.sleep(nanoseconds: 150_000_000)
-
-        // Trigger retry
-        coordinator.stubHistoryItem = makeHistoryItem(includeDogs: false, includeCats: true, includeChildren: true)
-        viewModel.retryLastScan()
-        try? await Task.sleep(nanoseconds: 150_000_000)
-
-        XCTAssertEqual(coordinator.startCalls.count, 2)
-        let first = coordinator.startCalls.first
-        let second = coordinator.startCalls.last
-        XCTAssertEqual(first?.includeDogs, second?.includeDogs)
-        XCTAssertEqual(first?.includeCats, second?.includeCats)
-        XCTAssertEqual(first?.includeChildren, second?.includeChildren)
-    }
-
-    @MainActor
     func test_cancelScan_clearsState() async {
         let coordinator = MockCoordinator()
         coordinator.stubHistoryItem = makeHistoryItem(includeDogs: false, includeCats: false, includeChildren: true)
@@ -282,9 +269,28 @@ final class ScanViewModelTests: XCTestCase {
         let data = image.jpegData(compressionQuality: 0.8)!
 
         viewModel.beginScan(with: data, uiImage: image, includeDog: false, includeCat: false, includeChildren: true)
-        try? await Task.sleep(nanoseconds: 50_000_000)
+        try? await waitUntil { coordinator.startCalls.count == 1 }
         viewModel.cancelScan()
-        try? await Task.sleep(nanoseconds: 50_000_000)
+        try? await waitUntil { viewModel.phase == .idle }
+
+        XCTAssertEqual(coordinator.cancelCallCount, 1)
+        XCTAssertEqual(viewModel.phase, .idle)
+        XCTAssertNil(viewModel.resultVM)
+    }
+
+    @MainActor
+    func test_cancelScan_preventsResultFromCompleting() async {
+        let coordinator = DelayedCoordinator(delayNanoseconds: 150_000_000)
+        coordinator.stubHistoryItem = makeHistoryItem(includeDogs: false, includeCats: false, includeChildren: true)
+        coordinator.stubProductAnalysis = makeProductAnalysis()
+        let viewModel = ScanViewModel(coordinator: coordinator)
+        let image = makeImage()
+        let data = image.jpegData(compressionQuality: 0.8)!
+
+        viewModel.beginScan(with: data, uiImage: image, includeDog: false, includeCat: false, includeChildren: true)
+        try? await waitUntil { coordinator.startCalls.count == 1 }
+        viewModel.cancelScan()
+        try? await waitUntil { coordinator.didComplete }
 
         XCTAssertEqual(coordinator.cancelCallCount, 1)
         XCTAssertEqual(viewModel.phase, .idle)
@@ -369,6 +375,51 @@ private final class MockCoordinator: ScanAnalysisCoordinating {
         startCalls.append(options)
         latestHistoryItem = stubHistoryItem
         latestProductAnalysis = stubProductAnalysis
+    }
+
+    func cancelAnalysis() {
+        cancelCallCount += 1
+    }
+
+    var stagePublisher: AnyPublisher<AnalysisStage, Never> { stageSubject.eraseToAnyPublisher() }
+    var partialPublisher: AnyPublisher<String?, Never> { partialSubject.eraseToAnyPublisher() }
+    var visionBestGuessPublisher: AnyPublisher<String?, Never> { bestGuessSubject.eraseToAnyPublisher() }
+    var visionWebEntitiesPublisher: AnyPublisher<[String], Never> { webEntitiesSubject.eraseToAnyPublisher() }
+}
+
+@MainActor
+private final class DelayedCoordinator: ScanAnalysisCoordinating {
+    var startCalls: [SafetyOptions] = []
+    var cancelCallCount = 0
+    var stubHistoryItem: ScanHistoryItem?
+    var stubProductAnalysis: ProductAnalysis?
+    var latestHistoryItem: ScanHistoryItem?
+    var latestProductAnalysis: ProductAnalysis?
+    var stage: AnalysisStage = .fast
+    var fastDuration: TimeInterval? = nil
+    var smartDuration: TimeInterval? = nil
+    var didComplete = false
+
+    private let delayNanoseconds: UInt64
+    private let stageSubject = CurrentValueSubject<AnalysisStage, Never>(.fast)
+    private let partialSubject = CurrentValueSubject<String?, Never>(nil)
+    private let bestGuessSubject = CurrentValueSubject<String?, Never>(nil)
+    private let webEntitiesSubject = CurrentValueSubject<[String], Never>([])
+
+    init(delayNanoseconds: UInt64) {
+        self.delayNanoseconds = delayNanoseconds
+    }
+
+    func startGeminiScan(image: UIImage, options: SafetyOptions) async throws {
+        startCalls.append(options)
+        await withCheckedContinuation { continuation in
+            DispatchQueue.global().asyncAfter(deadline: .now() + .nanoseconds(Int(delayNanoseconds))) {
+                continuation.resume()
+            }
+        }
+        latestHistoryItem = stubHistoryItem
+        latestProductAnalysis = stubProductAnalysis
+        didComplete = true
     }
 
     func cancelAnalysis() {

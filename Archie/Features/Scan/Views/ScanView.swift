@@ -39,6 +39,8 @@ struct ScanView: View {
     @State private var isPhotoPickerPresented = false
     @State private var cameraState: CameraState = .hidden
     @State private var frozenFrame: UIImage?
+    @State private var pendingPreviewFreeze = false
+    @State private var shutterFlashOpacity = 0.0
 
     private let userSession: UserSession
     private let onShowHistory: () -> Void
@@ -105,6 +107,10 @@ struct ScanView: View {
             presentAnalyzingState(with: image)
             viewModel.beginScan(with: data, uiImage: image, includeDog: includeDog, includeCat: includeCat, includeChildren: false)
             cameraViewModel.capturedImage = nil
+        }
+        .onChange(of: cameraViewModel.previewImage) { _, newImage in
+            guard pendingPreviewFreeze, let image = newImage else { return }
+            presentAnalyzingState(with: image)
         }
         .onChange(of: viewModel.phase) { _, newPhase in
             switch newPhase {
@@ -193,6 +199,11 @@ struct ScanView: View {
                 .ignoresSafeArea()
 
             ScanOverlayView(mode: cameraState == .analyzing ? .scanning : .framing, availableSize: size)
+
+            Color.white
+                .opacity(shutterFlashOpacity)
+                .ignoresSafeArea()
+                .allowsHitTesting(false)
         }
     }
 
@@ -203,8 +214,10 @@ struct ScanView: View {
                     .font(.system(size: 15, weight: .semibold))
                     .foregroundColor(.secondary)
                     .padding(10)
-                    .background(Color.white.opacity(0.9))
-                    .clipShape(Circle())
+                    .background(
+                        Circle()
+                            .fill(.ultraThinMaterial)
+                    )
             }
 
             Spacer()
@@ -227,6 +240,9 @@ struct ScanView: View {
         case .hidden:
             requestCameraAccessIfNeeded()
         case .live:
+            pendingPreviewFreeze = true
+            triggerShutterFlash()
+            cameraViewModel.requestPreviewFrame()
             cameraViewModel.capturePhoto()
         case .analyzing:
             break
@@ -239,6 +255,7 @@ struct ScanView: View {
     }
 
     private func presentAnalyzingState(with image: UIImage) {
+        pendingPreviewFreeze = false
         frozenFrame = image
         withAnimation(.easeInOut(duration: 0.25)) {
             cameraState = .analyzing
@@ -257,6 +274,20 @@ struct ScanView: View {
             cameraState = .hidden
         }
         frozenFrame = nil
+        pendingPreviewFreeze = false
+        shutterFlashOpacity = 0
+    }
+
+    private func triggerShutterFlash() {
+        shutterFlashOpacity = 0
+        withAnimation(.easeOut(duration: 0.08)) {
+            shutterFlashOpacity = 0.85
+        }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.08) {
+            withAnimation(.easeOut(duration: 0.2)) {
+                shutterFlashOpacity = 0
+            }
+        }
     }
 
     private func requestCameraAccessIfNeeded() {
@@ -474,3 +505,4 @@ private extension ScanView {
         .frame(maxWidth: .infinity, alignment: .leading)
     }
 }
+

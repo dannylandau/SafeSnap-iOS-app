@@ -8,7 +8,6 @@ import UIKit
 
 struct ResultView: View {
     @Environment(\.dismiss) private var dismiss
-    @State private var sharePayload: SharePayload?
     @State private var headerHeight: CGFloat = 0
     @State private var isZoomPresented: Bool = false
     @State private var kidsCollapsed: Bool = false
@@ -16,12 +15,12 @@ struct ResultView: View {
     @State private var catsCollapsed: Bool = true
     @State private var isSharing: Bool = false
     @State private var shareError: String?
-    @State private var isBackendResponsePresented: Bool = false
 
     struct SharePayload: Identifiable { let id = UUID(); let items: [Any] }
 
     @ObservedObject var vm: RecognitionResultViewModel
     @StateObject private var shareService = ShareService()
+    @State private var activeSheet: SharePayload?
 
     // Measures the overlay header height so we can offset the scroll content
     private struct HeaderHeightKey: PreferenceKey {
@@ -47,11 +46,11 @@ struct ResultView: View {
         .onPreferenceChange(HeaderHeightKey.self) { h in
             headerHeight = h
         }
-        .sheet(item: $sharePayload) { payload in
-            ShareSheet(activityItems: payload.items)
+        .safeAreaInset(edge: .top) {
+            shareButton()
         }
-        .sheet(isPresented: $isBackendResponsePresented) {
-            BackendResponseView(text: backendResponseText)
+        .sheet(item: $activeSheet) { payload in
+            ShareSheet(activityItems: payload.items)
         }
         .fullScreenCover(isPresented: $isZoomPresented) {
             ZStack {
@@ -85,7 +84,6 @@ struct ResultView: View {
     @ViewBuilder
     private var content: some View {
         VStack(spacing: 24) {
-            shareButton()
             vibeCheckBanner()
             imageCard()
             headerBar()
@@ -115,16 +113,6 @@ struct ResultView: View {
         HStack {
             Spacer()
             Button {
-                isBackendResponsePresented = true
-            } label: {
-                Text("Response")
-                    .font(.headline)
-            }
-            .buttonStyle(.bordered)
-            .controlSize(.regular)
-            .disabled(backendResponseText == nil)
-            .accessibilityLabel("Show backend response")
-            Button {
                 Task { await prepareShareWithURL() }
             } label: {
                 HStack(spacing: 6) {
@@ -142,6 +130,8 @@ struct ResultView: View {
             .accessibilityLabel("Share")
             .disabled(isSharing)
         }
+        .padding(.horizontal)
+        .padding(.vertical, 8)
         .alert("Share Error", isPresented: .init(
             get: { shareError != nil },
             set: { if !$0 { shareError = nil } }
@@ -152,10 +142,6 @@ struct ResultView: View {
                 Text(error)
             }
         }
-    }
-
-    private var backendResponseText: String? {
-        vm.productAnalysis?.prettyPrintedJSON()
     }
 
     // Resolves a stored file URL into the **current** app container if needed
@@ -402,6 +388,7 @@ struct ResultView: View {
             bulletsRisk: risks,
             paragraph: narrative,
             isCollapsed: $dogsCollapsed,
+            emptyStateText: "We did not receive dog safety details for this item yet.",
             isHumorMode: vm.isHumorMode
         )
         .padding(.horizontal)
@@ -421,6 +408,7 @@ struct ResultView: View {
             bulletsRisk: risks,
             paragraph: narrative,
             isCollapsed: $catsCollapsed,
+            emptyStateText: "We did not receive cat safety details for this item yet.",
             isHumorMode: vm.isHumorMode
         )
         .padding(.horizontal)
@@ -592,7 +580,7 @@ struct ResultView: View {
                 items.append(image)
             }
             
-            sharePayload = SharePayload(items: items)
+            activeSheet = SharePayload(items: items)
             isSharing = false
             return
         }
@@ -603,7 +591,7 @@ struct ResultView: View {
             // Activity items: share text + URL
             let items: [Any] = [result.shareText, result.shareURL]
             
-            sharePayload = SharePayload(items: items)
+            activeSheet = SharePayload(items: items)
             isSharing = false
         } catch {
             shareError = error.localizedDescription
@@ -625,30 +613,6 @@ struct ShareSheet: UIViewControllerRepresentable {
       _ uiController: UIActivityViewController,
       context: Context
     ) {}
-}
-
-private struct BackendResponseView: View {
-    @Environment(\.dismiss) private var dismiss
-    let text: String?
-
-    var body: some View {
-        NavigationStack {
-            ScrollView([.vertical, .horizontal]) {
-                Text(text ?? "No backend response available.")
-                    .font(.system(.footnote, design: .monospaced))
-                    .foregroundStyle(.primary)
-                    .textSelection(.enabled)
-                    .padding()
-                    .frame(maxWidth: .infinity, alignment: .leading)
-            }
-            .navigationTitle("Backend Response")
-            .toolbar {
-                ToolbarItem(placement: .topBarTrailing) {
-                    Button("Done") { dismiss() }
-                }
-            }
-        }
-    }
 }
 
 // MARK: - File-scoped helpers (usable by nested views)
@@ -742,7 +706,13 @@ private struct SafetySectionView: View {
     let bulletsRisk: [String]
     let paragraph: String?
     @Binding var isCollapsed: Bool
+    var emptyStateText: String? = nil
     var isHumorMode: Bool = false
+    
+    private var hasDetails: Bool {
+        let hasParagraph = (paragraph?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false)
+        return !bulletsGood.isEmpty || !bulletsRisk.isEmpty || hasParagraph
+    }
 
     private var tint: Color {
         isHumorMode ? .purple : scoreColor(score10)
@@ -822,6 +792,14 @@ private struct SafetySectionView: View {
 
                     if let paragraph, !paragraph.isEmpty {
                         Text(paragraph)
+                            .font(.footnote)
+                            .foregroundStyle(.secondary)
+                            .padding(.horizontal)
+                            .padding(.bottom, 8)
+                    }
+                    
+                    if !hasDetails, let emptyStateText {
+                        Text(emptyStateText)
                             .font(.footnote)
                             .foregroundStyle(.secondary)
                             .padding(.horizontal)
