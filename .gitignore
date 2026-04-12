@@ -58,10 +58,8 @@ Carthage/Build/
 
 fastlane/report.xml
 fastlane/Preview.html
-fastlane/screenshots/**/*.png
 fastlane/test_output
 AGENTS.md
-SafeSnap/Resources/Secrets.plist
 SafeScan-Info.plist
 .DS_Store
-SafeSnap/Resources/Secrets.plist
+Archie/Resources/Secrets.plist
