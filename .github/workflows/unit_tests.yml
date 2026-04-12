@@ -18,14 +18,14 @@ jobs:
       - name: 🧰 Set up Xcode
         uses: maxim-lobanov/setup-xcode@v1
         with:
-          xcode-version: '15.0.1'
+          xcode-version: '26.3.0'
 
       - name: 🔍 Run tests
         run: |
           xcodebuild test \
             -project SafeSnap.xcodeproj \
             -scheme SafeSnap \
-            -destination 'platform=iOS Simulator,name=iPhone 15' \
+            -destination 'platform=iOS Simulator,name=iPhone 17' \
             -enableCodeCoverage YES | xcpretty
         continue-on-error: false
 
