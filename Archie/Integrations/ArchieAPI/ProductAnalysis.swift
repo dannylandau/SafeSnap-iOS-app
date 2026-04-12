@@ -355,10 +355,4 @@ extension ProductAnalysis {
         )
     }
 
-    public func prettyPrintedJSON() -> String? {
-        let encoder = JSONEncoder()
-        encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
-        guard let data = try? encoder.encode(self) else { return nil }
-        return String(data: data, encoding: .utf8)
-    }
 }

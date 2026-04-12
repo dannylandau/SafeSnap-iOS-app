@@ -38,39 +38,12 @@ public struct AppAlert: Identifiable, Equatable {
 }
 
 extension AppAlert {
-    static func retryable(
-        title: String,
-        message: String? = nil,
-        retry: @escaping () -> Void
-    ) -> AppAlert {
-        AppAlert(
-            title: title,
-            message: message,
-            actions: [
-                .init(title: "Retry", role: .normal, perform: retry),
-                .init(title: "Cancel", role: .cancel)
-            ]
-        )
-    }
-
-    static func from(error: Error, retry: (() -> Void)? = nil) -> AppAlert {
+    static func from(error: Error) -> AppAlert {
         // Prefer rich presentation for LocalizedError
         if let le = error as? LocalizedError {
             let composed = ErrorPresenter.composedMessage(for: error)
             let title = (le.errorDescription?.isEmpty == false) ? le.errorDescription! : "Something went wrong"
-            if let retry = retry {
-                return AppAlert(
-                    title: title,
-                    message: composed,
-                    error: error,
-                    actions: [
-                        .init(title: "Retry", role: .normal, perform: retry),
-                        .init(title: "Cancel", role: .cancel)
-                    ]
-                )
-            } else {
-                return AppAlert(title: title, message: composed, error: error)
-            }
+            return AppAlert(title: title, message: composed, error: error)
         }
 
         // Domain-specific fallbacks for non-LocalizedError
@@ -86,19 +59,7 @@ extension AppAlert {
             message = error.localizedDescription
         }
 
-        if let retry = retry {
-            return AppAlert(
-                title: "Something went wrong",
-                message: message,
-                error: error,
-                actions: [
-                    .init(title: "Retry", role: .normal, perform: retry),
-                    .init(title: "Cancel", role: .cancel)
-                ]
-            )
-        } else {
-            return AppAlert(title: "Something went wrong", message: message, error: error)
-        }
+        return AppAlert(title: "Something went wrong", message: message, error: error)
     }
 
     private static func decodingMessage(_ e: DecodingError) -> String {

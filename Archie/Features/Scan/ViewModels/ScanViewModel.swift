@@ -52,6 +52,7 @@ final class ScanViewModel: ObservableObject {
     private let durationFormatter: ScanDurationFormatting
     private let featureFlags: FeatureFlagProviding
     private var cancellables: Set<AnyCancellable> = []
+    private var scanTask: Task<Void, Never>?
 
     init(
         coordinator: ScanAnalysisCoordinating,
@@ -76,6 +77,7 @@ final class ScanViewModel: ObservableObject {
 
     @MainActor
     func beginScan(with imageData: Data, uiImage: UIImage, includeDog: Bool, includeCat: Bool, includeChildren: Bool) {
+        scanTask?.cancel()
         self.handleImage(uiImage)
         lastImageData = imageData
         lastUIImage = uiImage
@@ -88,13 +90,15 @@ final class ScanViewModel: ObservableObject {
         }
         scanDurationText = nil
 
-        Task {
+        scanTask = Task {
             do {
                 try await coordinator.startGeminiScan(
                     image: uiImage,
                     options: SafetyOptions(includeDogs: includeDog, includeCats: includeCat, includeChildren: includeChildren)
                 )
+                guard !Task.isCancelled else { return }
                 let durationText = await stopAndRecordDuration()
+                guard !Task.isCancelled else { return }
                 if let result = await coordinator.latestHistoryItem {
                     let productAnalysis = await coordinator.latestProductAnalysis
                     let viewModel = RecognitionResultViewModel(
@@ -109,6 +113,7 @@ final class ScanViewModel: ObservableObject {
                     }
                 }
             } catch is CancellationError {
+                if Task.isCancelled { return }
                 await MainActor.run {
                     self.durationTracker.reset()
                     self.scanDurationText = nil
@@ -117,6 +122,7 @@ final class ScanViewModel: ObservableObject {
                     self.phase = .idle
                 }
             } catch let error as ScanError {
+                if Task.isCancelled { return }
                 _ = await stopAndRecordDuration()
                 if error.localizedDescription.contains("Recognition confidence too low") {
                     await MainActor.run {
@@ -133,11 +139,10 @@ final class ScanViewModel: ObservableObject {
                     #if DEBUG
                     print(error.localizedDescription)
                     #endif
-                    alerts.show(AppAlert.from(error: error, retry: {
-                        [weak self] in self?.retryLastScan()
-                    }))
+                    alerts.show(AppAlert.from(error: error))
                 }
             } catch {
+                if Task.isCancelled { return }
                 _ = await stopAndRecordDuration()
                 if error.localizedDescription.contains("Recognition confidence too low") {
                     await MainActor.run {
@@ -154,10 +159,11 @@ final class ScanViewModel: ObservableObject {
                     #if DEBUG
                     print(error.localizedDescription)
                     #endif
-                    alerts.show(AppAlert.from(error: error, retry: {
-                        [weak self] in self?.retryLastScan()
-                    }))
+                    alerts.show(AppAlert.from(error: error))
                 }
+            }
+            await MainActor.run {
+                self.scanTask = nil
             }
         }
     }
@@ -189,16 +195,13 @@ final class ScanViewModel: ObservableObject {
         )
     }
 
-    @MainActor func retryLastScan() {
-        guard let data = lastImageData, let image = lastUIImage else { return }
-        beginScan(with: data, uiImage: image, includeDog: lastIncludeDog, includeCat: lastIncludeCat, includeChildren: lastIncludeChildren)
-    }
-    
     func cancelScan() {
         #if DEBUG
         print("🛑 Cancelling scan")
         #endif
         Task { @MainActor in
+            self.scanTask?.cancel()
+            self.scanTask = nil
             self.coordinator.cancelAnalysis()
             self.phase = .idle
             self.resultVM = nil
