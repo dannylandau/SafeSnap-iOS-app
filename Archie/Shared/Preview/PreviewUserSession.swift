@@ -20,5 +20,9 @@ final class PreviewUserSession: UserSession {
     func signOut() async throws {
         isSignedIn = false
     }
+
+    func deleteAccount() async throws {
+        isSignedIn = false
+    }
 }
 #endif

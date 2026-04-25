@@ -49,7 +49,7 @@ struct IntroPage: Identifiable, Equatable {
             title: "Get Safety Report",
             subtitle: "Get AI powered safety report of products for your kids.",
             accent: .reports,
-            ctaTitle: "Continue with Google"
+            ctaTitle: "Sign In"
         )
     ]
 }

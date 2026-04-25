@@ -11,10 +11,10 @@ struct FirebaseAuthView: View {
     var body: some View {
         VStack(spacing: 32) {
             VStack(alignment: .leading, spacing: 12) {
-                Text("Sign in with Google")
+                Text("Sign In")
                     .font(.largeTitle.bold())
 
-                Text("Connect your Google account to sync Archie history across devices.")
+                Text("Sign in to sync your Archie history across devices.")
                     .font(.body)
                     .foregroundColor(.secondary)
             }
@@ -27,13 +27,25 @@ struct FirebaseAuthView: View {
                     .frame(maxWidth: .infinity, alignment: .leading)
             }
 
-            GoogleSignInButton(
-                title: "Continue with Google",
-                isLoading: viewModel.isLoading
-            ) {
-                Task {
-                    let presenter = UIApplication.safesnapKeyWindow?.rootViewController?.topMostViewController
-                    _ = await viewModel.signInWithGoogle(presenting: presenter)
+            VStack(spacing: 12) {
+                AppleSignInButton {
+                    Task {
+                        let window = UIApplication.safesnapKeyWindow
+                        _ = await viewModel.signInWithApple(presenting: window)
+                    }
+                }
+                .frame(height: 50)
+                .allowsHitTesting(!viewModel.isLoading)
+                .opacity(viewModel.isLoading ? 0.6 : 1)
+
+                GoogleSignInButton(
+                    title: "Continue with Google",
+                    isLoading: viewModel.isLoading
+                ) {
+                    Task {
+                        let presenter = UIApplication.safesnapKeyWindow?.rootViewController?.topMostViewController
+                        _ = await viewModel.signInWithGoogle(presenting: presenter)
+                    }
                 }
             }
 

@@ -40,12 +40,19 @@ struct OnboardingView: View {
                     ForEach(viewModel.pages.indices, id: \.self) { index in
                         let page = viewModel.pages[index]
                         IntroPageCardView(page: page) {
-                            if let ctaTitle = page.ctaTitle {
-                                GoogleSignInButton(
-                                    title: ctaTitle,
-                                    isLoading: authViewModel.isLoading,
-                                    action: handleGoogleSignIn
-                                )
+                            if page.ctaTitle != nil {
+                                VStack(spacing: 12) {
+                                    AppleSignInButton(action: handleAppleSignIn)
+                                        .frame(height: 50)
+                                        .allowsHitTesting(!authViewModel.isLoading)
+                                        .opacity(authViewModel.isLoading ? 0.6 : 1)
+
+                                    GoogleSignInButton(
+                                        title: "Continue with Google",
+                                        isLoading: authViewModel.isLoading,
+                                        action: handleGoogleSignIn
+                                    )
+                                }
                                 .padding(.top, 12)
                             }
                         }
@@ -66,6 +73,18 @@ struct OnboardingView: View {
         Task {
             let presenter = UIApplication.safesnapKeyWindow?.rootViewController?.topMostViewController
             let success = await authViewModel.signInWithGoogle(presenting: presenter)
+            if success {
+                await MainActor.run {
+                    onFinished()
+                }
+            }
+        }
+    }
+
+    private func handleAppleSignIn() {
+        Task {
+            let window = UIApplication.safesnapKeyWindow
+            let success = await authViewModel.signInWithApple(presenting: window)
             if success {
                 await MainActor.run {
                     onFinished()

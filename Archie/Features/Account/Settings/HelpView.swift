@@ -9,9 +9,10 @@
 import SwiftUI
 
 struct HelpView: View {
+    @Environment(\.openURL) private var openURL
+
     var body: some View {
         List {
-            // FAQ Section with custom styling
             Section {
                 VStack(alignment: .leading, spacing: 12) {
                     Text("Common Questions")
@@ -34,22 +35,39 @@ struct HelpView: View {
                 }
             }
 
-            // Contact options
             Section {
-                NavigationLink(destination: Text("Support Chat or Email Screen")) {
-                    VStack(alignment: .leading) {
-                        Text("Contact Support")
-                        Text("Get help from our support team")
-                            .font(.caption)
+                Button {
+                    if let url = URL(string: "mailto:support@archieml.com?subject=Archie%20Support") {
+                        openURL(url)
+                    }
+                } label: {
+                    HStack {
+                        VStack(alignment: .leading) {
+                            Text("Contact Support")
+                            Text("Get help from our support team")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                        }
+                        Spacer()
+                        Image(systemName: "envelope")
                             .foregroundColor(.secondary)
                     }
                 }
 
-                NavigationLink(destination: Text("Report Form")) {
-                    VStack(alignment: .leading) {
-                        Text("Report Issue")
-                        Text("Help us improve the app")
-                            .font(.caption)
+                Button {
+                    if let url = URL(string: "mailto:support@archieml.com?subject=Archie%20Bug%20Report") {
+                        openURL(url)
+                    }
+                } label: {
+                    HStack {
+                        VStack(alignment: .leading) {
+                            Text("Report Issue")
+                            Text("Help us improve the app")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                        }
+                        Spacer()
+                        Image(systemName: "envelope")
                             .foregroundColor(.secondary)
                     }
                 }

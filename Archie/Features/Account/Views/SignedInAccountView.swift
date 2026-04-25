@@ -8,6 +8,7 @@ import SwiftUI
 struct SignedInAccountView: View {
     @StateObject private var viewModel: AccountViewModel
     @State private var showProfileEditor = false
+    @State private var showDeleteConfirmation = false
     @State private var sharePayload: SharePayload?
 
     private struct SharePayload: Identifiable {
@@ -24,6 +25,7 @@ struct SignedInAccountView: View {
             VStack(spacing: 24) {
                 accountCard
                 signOutButton
+                deleteAccountButton
             }
             .padding(.bottom, 48)
         }
@@ -32,6 +34,22 @@ struct SignedInAccountView: View {
         .toolbarBackground(.hidden, for: .navigationBar)
         .sheet(item: $sharePayload) { payload in
             ShareSheet(activityItems: payload.items)
+        }
+        .alert("Delete Account", isPresented: $showDeleteConfirmation) {
+            Button("Delete", role: .destructive) {
+                Task { await viewModel.deleteAccount() }
+            }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("This will permanently delete your account and all associated data. This action cannot be undone.")
+        }
+        .alert("Unable to Delete Account", isPresented: .init(
+            get: { viewModel.deleteError != nil },
+            set: { if !$0 { viewModel.deleteError = nil } }
+        )) {
+            Button("OK") { viewModel.deleteError = nil }
+        } message: {
+            Text(viewModel.deleteError ?? "")
         }
         .background(
             NavigationLink(destination: ProfileSettingsView(), isActive: $showProfileEditor) {
@@ -185,6 +203,28 @@ struct SignedInAccountView: View {
         .tint(Color.green)
         .buttonBorderShape(.capsule)
         .padding(.horizontal, 20)
+    }
+
+    private var deleteAccountButton: some View {
+        Button {
+            showDeleteConfirmation = true
+        } label: {
+            if viewModel.isDeletingAccount {
+                ProgressView()
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 14)
+            } else {
+                Text("Delete Account")
+                    .font(.headline)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 14)
+            }
+        }
+        .buttonStyle(.borderedProminent)
+        .tint(.red)
+        .buttonBorderShape(.capsule)
+        .padding(.horizontal, 20)
+        .disabled(viewModel.isDeletingAccount)
     }
 
     private var footer: some View {

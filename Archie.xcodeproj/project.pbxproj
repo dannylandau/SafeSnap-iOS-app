@@ -7,6 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		7DAA00012FA0100100000001 /* RevenueCat in Frameworks */ = {isa = PBXBuildFile; productRef = 7DAA00032FA0100100000003 /* RevenueCat */; };
 		7DDC17A52EE0A7FE00679CA8 /* FirebaseStorage in Frameworks */ = {isa = PBXBuildFile; productRef = 7DDC17A42EE0A7FE00679CA8 /* FirebaseStorage */; };
 		7DFB00042F9C123400ABCDE0 /* FirebaseAuth in Frameworks */ = {isa = PBXBuildFile; productRef = 7DFB00022F9C123400ABCDE0 /* FirebaseAuth */; };
 /* End PBXBuildFile section */
@@ -82,6 +83,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				7DAA00012FA0100100000001 /* RevenueCat in Frameworks */,
 				7DFB00042F9C123400ABCDE0 /* FirebaseAuth in Frameworks */,
 				7DDC17A52EE0A7FE00679CA8 /* FirebaseStorage in Frameworks */,
 			);
@@ -155,6 +157,7 @@
 			packageProductDependencies = (
 				7DFB00022F9C123400ABCDE0 /* FirebaseAuth */,
 				7DDC17A42EE0A7FE00679CA8 /* FirebaseStorage */,
+				7DAA00032FA0100100000003 /* RevenueCat */,
 			);
 			productName = Archie;
 			productReference = 7DBA4AB02E0DEA1700CB1313 /* Archie.app */;
@@ -240,6 +243,7 @@
 			minimizedProjectReferenceProxies = 1;
 			packageReferences = (
 				7DFB00032F9C123400ABCDE0 /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */,
+				7DAA00022FA0100100000002 /* XCRemoteSwiftPackageReference "purchases-ios-spm" */,
 			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = 7DBA4AB12E0DEA1700CB1313 /* Products */;
@@ -444,6 +448,7 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				ASSETCATALOG_COMPILER_INCLUDE_ALL_APPICON_ASSETS = YES;
+				CODE_SIGN_ENTITLEMENTS = Archie/Archie.entitlements;
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 34;
@@ -484,6 +489,7 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				ASSETCATALOG_COMPILER_INCLUDE_ALL_APPICON_ASSETS = YES;
+				CODE_SIGN_ENTITLEMENTS = Archie/Archie.entitlements;
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 34;
@@ -640,6 +646,14 @@
 				minimumVersion = 10.29.0;
 			};
 		};
+		7DAA00022FA0100100000002 /* XCRemoteSwiftPackageReference "purchases-ios-spm" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/RevenueCat/purchases-ios-spm";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 5.0.0;
+			};
+		};
 /* End XCRemoteSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
@@ -652,6 +666,11 @@
 			isa = XCSwiftPackageProductDependency;
 			package = 7DFB00032F9C123400ABCDE0 /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */;
 			productName = FirebaseAuth;
+		};
+		7DAA00032FA0100100000003 /* RevenueCat */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 7DAA00022FA0100100000002 /* XCRemoteSwiftPackageReference "purchases-ios-spm" */;
+			productName = RevenueCat;
 		};
 /* End XCSwiftPackageProductDependency section */
 	};

@@ -12,12 +12,13 @@ import FirebaseAuth
 final class AppDependencies {
     
     // MARK: - Core Services
-    
+
     let userSession: UserSession
     let onboardingState: OnboardingStateStore
-    
+    let premiumManager: PremiumManager
+
     // MARK: - API Services (Backend-based)
-    
+
     let apiService: ArchieAPIService
     let storageService: FirebaseStorageService
     let historyService: ScanHistoryService
@@ -27,6 +28,8 @@ final class AppDependencies {
     init(userSession: UserSession) {
         self.userSession = userSession
         self.onboardingState = OnboardingStateStore()
+        self.premiumManager = PremiumManager()
+        self.premiumManager.configure()
         
         // Configure API service with token provider
         self.apiService = ArchieAPIService(

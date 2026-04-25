@@ -20,7 +20,8 @@ struct AccountView: View {
         self._isSignedIn = State(initialValue: session.isSignedIn)
         _viewModel = StateObject(wrappedValue: AccountViewModel(
             userSession: session,
-            historyService: dependencies.historyService
+            historyService: dependencies.historyService,
+            premiumManager: dependencies.premiumManager
         ))
     }
     

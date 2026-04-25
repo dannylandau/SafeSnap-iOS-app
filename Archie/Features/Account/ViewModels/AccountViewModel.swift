@@ -12,16 +12,21 @@ final class AccountViewModel: ObservableObject {
     let appVersion = "v1.0"
     let demoMode = true
 
+    @Published var isDeletingAccount = false
+    @Published var deleteError: String?
+
     // MARK: - Dependencies
     private let userSession: UserSession
     private let historyService: ScanHistoryService
+    private let premiumManager: PremiumManager
     private var cancellables = Set<AnyCancellable>()
 
     // MARK: - Init
 
-    init(userSession: UserSession, historyService: ScanHistoryService) {
+    init(userSession: UserSession, historyService: ScanHistoryService, premiumManager: PremiumManager) {
         self.userSession = userSession
         self.historyService = historyService
+        self.premiumManager = premiumManager
         bind()
         isSignedIn = userSession.isSignedIn
     }
@@ -98,5 +103,19 @@ final class AccountViewModel: ObservableObject {
     func signOut() async {
         try? await userSession.signOut()
         refreshAuth()
+    }
+
+    func deleteAccount() async {
+        isDeletingAccount = true
+        deleteError = nil
+        do {
+            try await userSession.deleteAccount()
+            historyService.clearAll()
+            premiumManager.logOut()
+            refreshAuth()
+        } catch {
+            deleteError = error.localizedDescription
+        }
+        isDeletingAccount = false
     }
 }

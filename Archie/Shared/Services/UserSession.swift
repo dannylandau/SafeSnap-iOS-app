@@ -22,4 +22,5 @@ protocol UserSession: AnyObject {
     func getIdToken() async throws -> String?
     
     func signOut() async throws
+    func deleteAccount() async throws
 }

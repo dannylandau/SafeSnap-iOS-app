@@ -31,6 +31,13 @@ struct RootView: View {
         .animation(.easeInOut(duration: 0.3), value: shouldShowOnboarding)
         .onReceive(dependencies.userSession.isSignedInPublisher) { newValue in
             isSignedIn = newValue
+            Task {
+                if newValue, let userId = dependencies.userSession.userId {
+                    await dependencies.premiumManager.identify(userId: userId)
+                } else if !newValue {
+                    dependencies.premiumManager.logOut()
+                }
+            }
         }
     }
 

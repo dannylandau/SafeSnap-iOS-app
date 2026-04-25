@@ -41,8 +41,9 @@ struct PrivacySettingsView: View {
 
             Section("Third-Party Services") {
                 PrivacyBulletList(items: [
-                    "Google Sign-In for authentication",
-                    "Firebase Authentication and Firebase Storage for account and image sync"
+                    "Apple Sign-In and Google Sign-In for authentication",
+                    "Firebase Authentication and Firebase Storage for account and image sync",
+                    "RevenueCat for subscription and entitlement management"
                 ])
             }
 
@@ -50,8 +51,20 @@ struct PrivacySettingsView: View {
                 PrivacyBulletList(items: [
                     "Use the app without signing in",
                     "Sign out to stop syncing",
+                    "Delete your account and associated data from the Account screen",
                     "Delete the app to remove local data"
                 ])
+            }
+
+            Section {
+                Link(destination: URL(string: "https://archieml.com/privacy")!) {
+                    HStack {
+                        Text("Read Full Privacy Policy")
+                        Spacer()
+                        Image(systemName: "arrow.up.right")
+                            .font(.footnote)
+                    }
+                }
             }
         }
         .navigationTitle("Privacy")
