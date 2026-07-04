@@ -36,7 +36,7 @@ struct RedeemCodeView: View {
             .buttonBorderShape(.capsule)
             .padding(.horizontal, 32)
 
-            if PremiumManager.isSandbox {
+            #if DEBUG
                 VStack(spacing: 12) {
                     Text("Test Purchases")
                         .font(.caption)
@@ -89,7 +89,7 @@ struct RedeemCodeView: View {
                 }
                 .disabled(isPurchasing)
                 .overlay { if isPurchasing { ProgressView() } }
-            }
+            #endif
 
             Button {
                 isRestoring = true
