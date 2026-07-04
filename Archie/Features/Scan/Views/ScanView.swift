@@ -45,17 +45,23 @@ struct ScanView: View {
     private let userSession: UserSession
     private let onShowHistory: () -> Void
     private let onShowAccount: () -> Void
+    private let onCaptureGate: (() -> Bool)?
+    private let onGalleryGate: (() -> Bool)?
 
     init(
         viewModel: ScanViewModel,
         userSession: UserSession,
         cameraViewModel: @autoclosure @escaping () -> CameraViewModel = CameraViewModel(startSession: false),
+        onCaptureGate: (() -> Bool)? = nil,
+        onGalleryGate: (() -> Bool)? = nil,
         onShowHistory: @escaping () -> Void,
         onShowAccount: @escaping () -> Void
     ) {
         _viewModel = StateObject(wrappedValue: viewModel)
         _cameraViewModel = StateObject(wrappedValue: cameraViewModel())
         self.userSession = userSession
+        self.onCaptureGate = onCaptureGate
+        self.onGalleryGate = onGalleryGate
         self.onShowHistory = onShowHistory
         self.onShowAccount = onShowAccount
     }
@@ -238,6 +244,7 @@ struct ScanView: View {
     private func handleCaptureTap() {
         switch cameraState {
         case .hidden:
+            if let gate = onCaptureGate, !gate() { return }
             requestCameraAccessIfNeeded()
         case .live:
             pendingPreviewFreeze = true
@@ -251,6 +258,7 @@ struct ScanView: View {
 
     private func handleGalleryTap() {
         guard cameraState == .hidden else { return }
+        if let gate = onGalleryGate, !gate() { return }
         requestPhotoAccessIfNeeded()
     }
 

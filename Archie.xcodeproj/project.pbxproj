@@ -451,7 +451,7 @@
 				CODE_SIGN_ENTITLEMENTS = Archie/Archie.entitlements;
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 34;
+				CURRENT_PROJECT_VERSION = 37;
 				DEVELOPMENT_TEAM = H56SLCRAL5;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
@@ -492,7 +492,7 @@
 				CODE_SIGN_ENTITLEMENTS = Archie/Archie.entitlements;
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 34;
+				CURRENT_PROJECT_VERSION = 37;
 				DEVELOPMENT_TEAM = H56SLCRAL5;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
@@ -638,14 +638,6 @@
 /* End XCConfigurationList section */
 
 /* Begin XCRemoteSwiftPackageReference section */
-		7DFB00032F9C123400ABCDE0 /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */ = {
-			isa = XCRemoteSwiftPackageReference;
-			repositoryURL = "https://github.com/firebase/firebase-ios-sdk";
-			requirement = {
-				kind = upToNextMajorVersion;
-				minimumVersion = 10.29.0;
-			};
-		};
 		7DAA00022FA0100100000002 /* XCRemoteSwiftPackageReference "purchases-ios-spm" */ = {
 			isa = XCRemoteSwiftPackageReference;
 			repositoryURL = "https://github.com/RevenueCat/purchases-ios-spm";
@@ -654,9 +646,22 @@
 				minimumVersion = 5.0.0;
 			};
 		};
+		7DFB00032F9C123400ABCDE0 /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/firebase/firebase-ios-sdk";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 10.29.0;
+			};
+		};
 /* End XCRemoteSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
+		7DAA00032FA0100100000003 /* RevenueCat */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 7DAA00022FA0100100000002 /* XCRemoteSwiftPackageReference "purchases-ios-spm" */;
+			productName = RevenueCat;
+		};
 		7DDC17A42EE0A7FE00679CA8 /* FirebaseStorage */ = {
 			isa = XCSwiftPackageProductDependency;
 			package = 7DFB00032F9C123400ABCDE0 /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */;
@@ -666,11 +671,6 @@
 			isa = XCSwiftPackageProductDependency;
 			package = 7DFB00032F9C123400ABCDE0 /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */;
 			productName = FirebaseAuth;
-		};
-		7DAA00032FA0100100000003 /* RevenueCat */ = {
-			isa = XCSwiftPackageProductDependency;
-			package = 7DAA00022FA0100100000002 /* XCRemoteSwiftPackageReference "purchases-ios-spm" */;
-			productName = RevenueCat;
 		};
 /* End XCSwiftPackageProductDependency section */
 	};

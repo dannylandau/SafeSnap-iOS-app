@@ -3,12 +3,18 @@ import RevenueCat
 
 @MainActor
 final class PremiumManager: ObservableObject {
-    @Published private(set) var isPremium = false
+    @Published private(set) var isPremium: Bool {
+        didSet { UserDefaults.standard.set(isPremium, forKey: "com.archie.isPremiumCache") }
+    }
     @Published private(set) var isLoading = true
 
     static let apiKey: String = Bundle.main.infoDictionaryValue(for: "RevenueCatAPIKey") ?? ""
 
     private var isConfigured: Bool { !Self.apiKey.isEmpty }
+
+    init() {
+        self.isPremium = UserDefaults.standard.bool(forKey: "com.archie.isPremiumCache")
+    }
 
     func configure() {
         guard isConfigured else {
@@ -23,7 +29,6 @@ final class PremiumManager: ObservableObject {
 
     func identify(userId: String) async {
         guard isConfigured else { return }
-        isLoading = true
         do {
             let (customerInfo, _) = try await Purchases.shared.logIn(userId)
             isPremium = customerInfo.entitlements["premium"]?.isActive == true
@@ -55,6 +60,42 @@ final class PremiumManager: ObservableObject {
 
     func redeemCode() {
         Purchases.shared.presentCodeRedemptionSheet()
+    }
+
+    static var isSandbox: Bool {
+        #if DEBUG
+        return true
+        #else
+        return Bundle.main.appStoreReceiptURL?.lastPathComponent == "sandboxReceipt"
+        #endif
+    }
+
+    func purchaseMonthly() async -> Bool {
+        await purchasePackage(identifier: "$rc_monthly")
+    }
+
+    func purchaseYearly() async -> Bool {
+        await purchasePackage(identifier: "$rc_annual")
+    }
+
+    private func purchasePackage(identifier: String) async -> Bool {
+        do {
+            let offerings = try await Purchases.shared.offerings()
+            guard let package = offerings.current?.package(identifier: identifier) else {
+                print("[PremiumManager] Package \(identifier) not found")
+                return false
+            }
+            let result = try await Purchases.shared.purchase(package: package)
+            isPremium = result.customerInfo.entitlements["premium"]?.isActive == true
+            return isPremium
+        } catch {
+            print("[PremiumManager] Purchase failed: \(error.localizedDescription)")
+            return false
+        }
+    }
+
+    func grantTestAccess() {
+        isPremium = true
     }
 
     func restorePurchases() async -> Bool {
