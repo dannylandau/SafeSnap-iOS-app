@@ -36,33 +36,9 @@
 		7DBA4AC72E0DEA1800CB1313 /* ArchieUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = ArchieUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
-/* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
-		7D89CC732E65A16800042491 /* Exceptions for "Archie" folder in "Archie" target */ = {
-			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
-			membershipExceptions = (
-				"Shared/Extensions/Task+Extensions.swift",
-			);
-			target = 7DBA4AAF2E0DEA1700CB1313 /* Archie */;
-		};
-/* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
-
-/* Begin PBXFileSystemSynchronizedGroupBuildPhaseMembershipExceptionSet section */
-		7D89CC742E65A16800042491 /* Exceptions for "Archie" folder in "Copy Bundle Resources" phase from "Archie" target */ = {
-			isa = PBXFileSystemSynchronizedGroupBuildPhaseMembershipExceptionSet;
-			buildPhase = 7DBA4AAE2E0DEA1700CB1313 /* Resources */;
-			membershipExceptions = (
-				"Shared/Extensions/Task+Extensions.swift",
-			);
-		};
-/* End PBXFileSystemSynchronizedGroupBuildPhaseMembershipExceptionSet section */
-
 /* Begin PBXFileSystemSynchronizedRootGroup section */
 		7DBA4AB22E0DEA1700CB1313 /* Archie */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
-			exceptions = (
-				7D89CC732E65A16800042491 /* Exceptions for "Archie" folder in "Archie" target */,
-				7D89CC742E65A16800042491 /* Exceptions for "Archie" folder in "Copy Bundle Resources" phase from "Archie" target */,
-			);
 			path = Archie;
 			sourceTree = "<group>";
 		};

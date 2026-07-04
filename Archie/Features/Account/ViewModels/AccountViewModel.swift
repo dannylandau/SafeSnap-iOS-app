@@ -85,11 +85,11 @@ final class AccountViewModel: ObservableObject {
     // MARK: - Profile Info
 
     var fullName: String {
-        userSession.fullName ?? "Empty User"
+        userSession.fullName ?? "Guest"
     }
 
     var email: String {
-        userSession.email ?? "Empty Email"
+        userSession.email ?? ""
     }
 
     var memberSince: String? {
