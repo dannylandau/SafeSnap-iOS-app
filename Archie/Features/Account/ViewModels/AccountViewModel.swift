@@ -16,7 +16,7 @@ final class AccountViewModel: ObservableObject {
     @Published var deleteError: String?
 
     // MARK: - Dependencies
-    private let userSession: UserSession
+    let userSession: UserSession
     private let historyService: ScanHistoryService
     private let premiumManager: PremiumManager
     private var cancellables = Set<AnyCancellable>()

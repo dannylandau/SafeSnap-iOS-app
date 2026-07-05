@@ -52,7 +52,7 @@ struct SignedInAccountView: View {
             Text(viewModel.deleteError ?? "")
         }
         .background(
-            NavigationLink(destination: ProfileSettingsView(), isActive: $showProfileEditor) {
+            NavigationLink(destination: ProfileSettingsView(userSession: viewModel.userSession), isActive: $showProfileEditor) {
                 EmptyView()
             }
             .hidden()
@@ -108,7 +108,7 @@ struct SignedInAccountView: View {
 
     private var settingsStack: some View {
         VStack(spacing: 0) {
-            NavigationLink(destination: ProfileSettingsView()) {
+            NavigationLink(destination: ProfileSettingsView(userSession: viewModel.userSession)) {
                 AccountActionRow(
                     iconName: "person.crop.circle.fill",
                     iconTint: Color.blue.opacity(0.9),
