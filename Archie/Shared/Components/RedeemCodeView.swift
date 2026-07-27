@@ -36,59 +36,59 @@ struct RedeemCodeView: View {
             .buttonBorderShape(.capsule)
             .padding(.horizontal, 32)
 
-            #if DEBUG
-                VStack(spacing: 12) {
-                    Text("Test Purchases")
-                        .font(.caption)
-                        .foregroundColor(.secondary)
+            VStack(spacing: 12) {
+                Text("Or subscribe")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
 
-                    HStack(spacing: 12) {
-                        Button {
-                            isPurchasing = true
-                            Task {
-                                _ = await premiumManager.purchaseMonthly()
-                                isPurchasing = false
-                            }
-                        } label: {
-                            Text("Monthly")
-                                .font(.subheadline.bold())
-                                .frame(maxWidth: .infinity)
-                                .padding(.vertical, 10)
-                        }
-                        .buttonStyle(.borderedProminent)
-                        .tint(.orange)
-
-                        Button {
-                            isPurchasing = true
-                            Task {
-                                _ = await premiumManager.purchaseYearly()
-                                isPurchasing = false
-                            }
-                        } label: {
-                            Text("Yearly")
-                                .font(.subheadline.bold())
-                                .frame(maxWidth: .infinity)
-                                .padding(.vertical, 10)
-                        }
-                        .buttonStyle(.borderedProminent)
-                        .tint(.orange)
-                    }
-                    .padding(.horizontal, 32)
-
+                HStack(spacing: 12) {
                     Button {
-                        premiumManager.grantTestAccess()
+                        isPurchasing = true
+                        Task {
+                            _ = await premiumManager.purchaseMonthly()
+                            isPurchasing = false
+                        }
                     } label: {
-                        Text("Tester Bypass")
+                        Text("Monthly $9.99")
                             .font(.subheadline.bold())
                             .frame(maxWidth: .infinity)
                             .padding(.vertical, 10)
                     }
                     .buttonStyle(.borderedProminent)
-                    .tint(.red)
-                    .padding(.horizontal, 32)
+                    .tint(.green)
+
+                    Button {
+                        isPurchasing = true
+                        Task {
+                            _ = await premiumManager.purchaseYearly()
+                            isPurchasing = false
+                        }
+                    } label: {
+                        Text("Yearly $99.99")
+                            .font(.subheadline.bold())
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 10)
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .tint(.green)
                 }
-                .disabled(isPurchasing)
-                .overlay { if isPurchasing { ProgressView() } }
+                .padding(.horizontal, 32)
+            }
+            .disabled(isPurchasing)
+            .overlay { if isPurchasing { ProgressView() } }
+
+            #if DEBUG
+            Button {
+                premiumManager.grantTestAccess()
+            } label: {
+                Text("Tester Bypass")
+                    .font(.subheadline.bold())
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 10)
+            }
+            .buttonStyle(.borderedProminent)
+            .tint(.red)
+            .padding(.horizontal, 32)
             #endif
 
             Button {
