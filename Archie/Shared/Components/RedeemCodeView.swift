@@ -114,5 +114,13 @@ struct RedeemCodeView: View {
         .onChange(of: premiumManager.isPremium) { _, newValue in
             if newValue { onDismiss?() }
         }
+        .alert("Purchase Failed", isPresented: .init(
+            get: { premiumManager.purchaseError != nil },
+            set: { if !$0 { premiumManager.purchaseError = nil } }
+        )) {
+            Button("OK") { premiumManager.purchaseError = nil }
+        } message: {
+            Text(premiumManager.purchaseError ?? "")
+        }
     }
 }
