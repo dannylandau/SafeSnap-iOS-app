@@ -56,7 +56,7 @@ final class ArchieEndToEndTests: XCTestCase {
             userSession: nil
         )
         let viewModel = ScanViewModel(coordinator: coordinator)
-        let accountVM = AccountViewModel(userSession: MockUserSession(), historyService: historyService)
+        let accountVM = AccountViewModel(userSession: MockUserSession(), historyService: historyService, premiumManager: PremiumManager())
 
         let (image, data) = makeImage()
         viewModel.beginScan(with: data, uiImage: image, includeDog: false, includeCat: true, includeChildren: true)

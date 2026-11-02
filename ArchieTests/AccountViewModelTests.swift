@@ -16,7 +16,7 @@ final class AccountViewModelTests: XCTestCase {
         historyService.add(makeTestItem(score: 70))
         historyService.add(makeTestItem(score: 90))
 
-        let viewModel = AccountViewModel(userSession: MockUserSession(), historyService: historyService)
+        let viewModel = AccountViewModel(userSession: MockUserSession(), historyService: historyService, premiumManager: PremiumManager())
 
         try await waitUntil(timeout: 1.0) { viewModel.stats.contains(where: { $0.label == "Scans" }) }
 
@@ -30,7 +30,7 @@ final class AccountViewModelTests: XCTestCase {
 
     func test_userDetails_areExposed() {
         let historyService = makeHistoryService()
-        let viewModel = AccountViewModel(userSession: MockUserSession(), historyService: historyService)
+        let viewModel = AccountViewModel(userSession: MockUserSession(), historyService: historyService, premiumManager: PremiumManager())
 
         XCTAssertEqual(viewModel.fullName, "Jane Doe")
         XCTAssertEqual(viewModel.email, "jane@example.com")

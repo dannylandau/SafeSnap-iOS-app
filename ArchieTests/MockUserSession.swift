@@ -24,4 +24,6 @@ final class MockUserSession: UserSession, ObservableObject {
     }
     
     func signOut() async throws {}
+
+    func deleteAccount() async throws {}
 }
