@@ -14,7 +14,7 @@ Test command used below:
 
 ```bash
 xcodebuild test -project Archie.xcodeproj -scheme ArchieTests \
-  -destination 'platform=iOS Simulator,name=iPhone 15' \
+  -destination 'platform=iOS Simulator,name=iPhone 18 Pro' \
   -only-testing:ArchieTests/FreeScanCounterTests 2>&1 | grep -E "Test Case|error:|\*\* TEST"
 ```
 
@@ -283,7 +283,7 @@ git commit -m "feat: add per-user FreeScanCounter"
 - [ ] **Step 4: Build**
 
 ```bash
-xcodebuild build -project Archie.xcodeproj -scheme Archie -destination 'platform=iOS Simulator,name=iPhone 15' 2>&1 | grep -E "error:|\*\* BUILD"
+xcodebuild build -project Archie.xcodeproj -scheme Archie -destination 'platform=iOS Simulator,name=iPhone 18 Pro' 2>&1 | grep -E "error:|\*\* BUILD"
 ```
 Expected: `** BUILD SUCCEEDED **`
 
@@ -634,7 +634,7 @@ Keep the existing file header comment.
 - [ ] **Step 3: Build and run all unit tests**
 
 ```bash
-xcodebuild test -project Archie.xcodeproj -scheme ArchieTests -destination 'platform=iOS Simulator,name=iPhone 15' 2>&1 | grep -E "error:|failed|\*\* TEST"
+xcodebuild test -project Archie.xcodeproj -scheme ArchieTests -destination 'platform=iOS Simulator,name=iPhone 18 Pro' 2>&1 | grep -E "error:|failed|\*\* TEST"
 ```
 Expected: `** TEST SUCCEEDED **` (compare against the pre-change baseline if unrelated tests already fail).
 
@@ -662,4 +662,4 @@ git commit -m "feat: gate scans on free scan allowance, show remaining count"
 
 - [ ] Apply Danny's answers to `FreeScanPolicy` (one constant each) and commit.
 - [ ] Bump `CURRENT_PROJECT_VERSION` to 43 (both app target configurations in `project.pbxproj`), commit.
-- [ ] Archive and upload with Xcode 27.1 (`/Applications/Xcode-27.1.app`), not the default 27.2 (27B52), which App Store Connect rejects.
+- [ ] Archive and upload with Xcode 27.1 (`/Applications/Xcode 27.1.app`), not the default 27.2 (27B52), which App Store Connect rejects.
