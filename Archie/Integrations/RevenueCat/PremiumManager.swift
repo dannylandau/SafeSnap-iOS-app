@@ -8,6 +8,9 @@ final class PremiumManager: ObservableObject {
     }
     @Published private(set) var isLoading = true
     @Published var purchaseError: String?
+    @Published private(set) var freeScanLimit: Int?
+    @Published private(set) var monthlyPrice: String?
+    @Published private(set) var yearlyPrice: String?
 
     static let apiKey: String = Bundle.main.infoDictionaryValue(for: "RevenueCatAPIKey") ?? ""
 
@@ -33,6 +36,7 @@ final class PremiumManager: ObservableObject {
         do {
             let (customerInfo, _) = try await Purchases.shared.logIn(userId)
             isPremium = customerInfo.entitlements["premium"]?.isActive == true
+            await refreshOffering()
         } catch {
             print("[PremiumManager] logIn failed: \(error.localizedDescription)")
         }
@@ -53,10 +57,23 @@ final class PremiumManager: ObservableObject {
         do {
             let customerInfo = try await Purchases.shared.customerInfo()
             isPremium = customerInfo.entitlements["premium"]?.isActive == true
+            await refreshOffering()
         } catch {
             print("[PremiumManager] check failed: \(error.localizedDescription)")
         }
         isLoading = false
+    }
+
+    func refreshOffering() async {
+        guard isConfigured else { return }
+        do {
+            let offering = try await Purchases.shared.offerings().current
+            freeScanLimit = offering?.metadata[FreeScanPolicy.remoteLimitMetadataKey] as? Int
+            monthlyPrice = offering?.monthly?.storeProduct.localizedPriceString
+            yearlyPrice = offering?.annual?.storeProduct.localizedPriceString
+        } catch {
+            print("[PremiumManager] offerings fetch failed: \(error.localizedDescription)")
+        }
     }
 
     func redeemCode() {

@@ -47,6 +47,7 @@ struct ScanView: View {
     private let onShowAccount: () -> Void
     private let onCaptureGate: (() -> Bool)?
     private let onGalleryGate: (() -> Bool)?
+    private let freeScanStatus: String?
 
     init(
         viewModel: ScanViewModel,
@@ -54,6 +55,7 @@ struct ScanView: View {
         cameraViewModel: @autoclosure @escaping () -> CameraViewModel = CameraViewModel(startSession: false),
         onCaptureGate: (() -> Bool)? = nil,
         onGalleryGate: (() -> Bool)? = nil,
+        freeScanStatus: String? = nil,
         onShowHistory: @escaping () -> Void,
         onShowAccount: @escaping () -> Void
     ) {
@@ -62,6 +64,7 @@ struct ScanView: View {
         self.userSession = userSession
         self.onCaptureGate = onCaptureGate
         self.onGalleryGate = onGalleryGate
+        self.freeScanStatus = freeScanStatus
         self.onShowHistory = onShowHistory
         self.onShowAccount = onShowAccount
     }
@@ -138,6 +141,15 @@ struct ScanView: View {
                         onHistory: onShowHistory,
                         onAccount: onShowAccount
                     )
+
+                    if let freeScanStatus {
+                        Text(freeScanStatus)
+                            .font(.footnote.weight(.semibold))
+                            .foregroundColor(.secondary)
+                            .padding(.horizontal, 12)
+                            .padding(.vertical, 6)
+                            .background(Capsule().fill(.ultraThinMaterial))
+                    }
 
                     PetSafetyCard(includeDog: $includeDog, includeCat: $includeCat)
 #if DEBUG

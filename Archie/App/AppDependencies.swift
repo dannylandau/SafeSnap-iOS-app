@@ -16,6 +16,7 @@ final class AppDependencies {
     let userSession: UserSession
     let onboardingState: OnboardingStateStore
     let premiumManager: PremiumManager
+    let freeScanCounter: FreeScanCounter
 
     // MARK: - API Services (Backend-based)
 
@@ -30,6 +31,7 @@ final class AppDependencies {
         self.onboardingState = OnboardingStateStore()
         self.premiumManager = PremiumManager()
         self.premiumManager.configure()
+        self.freeScanCounter = FreeScanCounter(userId: userSession.userId)
         
         // Configure API service with token provider
         self.apiService = ArchieAPIService(
