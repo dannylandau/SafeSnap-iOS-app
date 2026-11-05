@@ -2,9 +2,9 @@
 
 Replace the invite-code gate on the first scan with N free scans, so App Review (and new users) see the full app working without a code or purchase. Approved by Danny on 2026-10-25 (~5h estimate).
 
-## Pending client decisions
+## Client decisions
 
-Asked Danny on 2026-11-02. Each answer maps to one constant in `FreeScanPolicy`, so implementation proceeds on the recommended defaults and the answers become a one-line change.
+Asked Danny on 2026-11-02; on 2026-11-04 he chose the recommended default for all three. Each answer maps to one constant in `FreeScanPolicy`.
 
 | # | Question | Default (recommended) | Alternative | Constant |
 |---|----------|----------------------|-------------|----------|
