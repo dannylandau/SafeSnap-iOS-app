@@ -51,3 +51,7 @@ Account is never gated, regardless of answer 2: Apple requires account deletion 
 ## Out of scope
 
 Server-side counting (reinstall-proof), redesigning the paywall visuals, App Store screenshots.
+
+## Known limitations (accepted 2026-11-06)
+
+- Counts are per user with a separate `anonymous` bucket, so signing in after using scans signed out, or switching accounts, starts a fresh allowance. Fix if needed: a single device-wide counter (drop `userId` from `FreeScanCounter`).
